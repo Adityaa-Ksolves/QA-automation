@@ -1,0 +1,45 @@
+# Copy this file to customers.yaml if you want to maintain an inventory outside Jenkins.
+# Keep secrets in Jenkins Credentials or client-side secret storage, not in this file.
+
+customers:
+  piedmont:
+    jenkins_label: customer-piedmont
+    default_url: https://piedmont.nimblethis.net/
+    agent_name: qa-agent-piedmont
+    concurrency: 1
+
+  zito:
+    jenkins_label: customer-zito
+    default_url: https://nimble-web.zitomedia.net/
+    agent_name: qa-agent-zito
+    concurrency: 1
+
+  brctv:
+    jenkins_label: customer-brctv
+    default_url: https://brctv.pnm.openvault.net/
+    agent_name: qa-agent-brctv
+    concurrency: 1
+
+  comporium:
+    jenkins_label: customer-comporium
+    default_url: https://comporiumv5.nimblethis.net/
+    agent_name: qa-agent-comporium
+    concurrency: 1
+
+  sectv:
+    jenkins_label: customer-sectv
+    default_url: http://sectv.vantage.openvault.net/
+    agent_name: qa-agent-sectv
+    concurrency: 1
+
+  secv:
+    jenkins_label: customer-secv
+    default_url: https://secv.pnm.openvault.net/
+    agent_name: qa-agent-secv
+    concurrency: 1
+
+  wow-trial:
+    jenkins_label: customer-wow-trial
+    default_url: https://wow-vantage-trial.openvault.net/
+    agent_name: qa-agent-wow-trial
+    concurrency: 1

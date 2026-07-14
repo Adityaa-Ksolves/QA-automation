@@ -1,0 +1,31 @@
+services:
+  jenkins-qa-agent:
+    build:
+      context: ..
+      dockerfile: agent/Dockerfile
+    image: qa-jenkins-inbound-agent:latest
+    container_name: ${JENKINS_AGENT_NAME}
+    restart: unless-stopped
+    environment:
+      JENKINS_URL: ${JENKINS_URL}
+      JENKINS_AGENT_NAME: ${JENKINS_AGENT_NAME}
+      JENKINS_SECRET: ${JENKINS_SECRET}
+      JENKINS_AGENT_WORKDIR: /home/jenkins/agent
+      CUSTOMER_KEY: ${CUSTOMER_KEY}
+      BROWSER: ${BROWSER:-chrome}
+    command:
+      - -url
+      - ${JENKINS_URL}
+      - -secret
+      - ${JENKINS_SECRET}
+      - -name
+      - ${JENKINS_AGENT_NAME}
+      - -workDir
+      - /home/jenkins/agent
+    volumes:
+      - agent-workdir:/home/jenkins/agent
+      - ../scripts:/home/jenkins/agent/poc-scripts:ro
+    shm_size: "2gb"
+
+volumes:
+  agent-workdir:
