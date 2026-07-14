@@ -1,32 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-artifact_root="${WORKSPACE_ARTIFACT_DIR:-artifacts}"
-log_dir="${artifact_root}/logs"
-result_dir="${artifact_root}/test-results"
-screenshot_dir="${artifact_root}/screenshots"
 qa_command="${QA_TEST_COMMAND:-}"
-
-mkdir -p "${log_dir}" "${result_dir}" "${screenshot_dir}"
-
-run_summary="${artifact_root}/qa-run-summary.txt"
-
-{
-  echo "customer=${CUSTOMER:-unknown}"
-  echo "target_url=${TARGET_URL:-${ENVIRONMENT_URL:-unknown}}"
-  echo "browser=${BROWSER:-chrome}"
-  echo "test_tags=${TEST_TAGS:-}"
-  echo "node=${NODE_NAME:-unknown}"
-  echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-} > "${run_summary}"
+base_requirements="${QA_BASE_REQUIREMENTS:-agent/requirements-qa-base.txt}"
 
 if [[ -z "${qa_command}" ]]; then
-  {
-    echo "QA_TEST_COMMAND is required."
-    echo "Set it in the Jenkins parameter or job configuration to the existing QA sanity command."
-    echo "Example:"
-    echo "behave features --tags \"\${TEST_TAGS}\" -D browser=\"\${BROWSER}\" -D endpoint=\"\${TARGET_URL}\" --junit --junit-directory artifacts/test-results"
-  } | tee "${log_dir}/qa-command-missing.log"
+  echo "QA_TEST_COMMAND is required." >&2
+  echo "Set it in the Jenkins parameter or job configuration to the existing QA sanity command." >&2
+  echo "Example:" >&2
+  echo "behave features --tags \"\${TEST_TAGS}\" -D browser=\"\${BROWSER}\" -D endpoint=\"\${TARGET_URL}\"" >&2
   exit 20
 fi
 
@@ -36,17 +18,45 @@ export BROWSER="${BROWSER:-chrome}"
 export TEST_TAGS="${TEST_TAGS:-}"
 export CUSTOMER="${CUSTOMER:-unknown}"
 export QA_SECRET_DIR="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
-export WORKSPACE_ARTIFACT_DIR="${artifact_root}"
 
-echo "Running QA command for ${CUSTOMER} against ${TARGET_URL}" | tee "${log_dir}/qa-command.log"
-echo "${qa_command}" >> "${log_dir}/qa-command.log"
+echo "QA sanity run"
+echo "customer=${CUSTOMER}"
+echo "target_url=${TARGET_URL}"
+echo "browser=${BROWSER}"
+echo "test_tags=${TEST_TAGS}"
+echo "node=${NODE_NAME:-unknown}"
+echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo
+echo "Preparing Python QA environment"
+python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+if [[ -f "${base_requirements}" ]]; then
+  python -m pip install -r "${base_requirements}"
+else
+  echo "Base QA requirements file not found: ${base_requirements}" >&2
+fi
+if [[ -f requirements.txt ]]; then
+  python -m pip install -r requirements.txt
+fi
+if ! command -v behave >/dev/null 2>&1; then
+  echo "behave is still not available after dependency installation." >&2
+  exit 21
+fi
+echo "behave=$(command -v behave)"
+echo
+echo "Running QA command:"
+echo "${qa_command}"
+echo
 
 set +e
-bash -lc "${qa_command}" > >(tee "${log_dir}/qa-stdout.log") 2> >(tee "${log_dir}/qa-stderr.log" >&2)
+bash -lc "${qa_command}"
 exit_code="$?"
 set -e
 
-echo "exit_code=${exit_code}" | tee -a "${run_summary}"
-echo "completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${run_summary}"
+echo
+echo "QA command completed"
+echo "exit_code=${exit_code}"
+echo "completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 exit "${exit_code}"

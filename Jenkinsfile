@@ -53,8 +53,9 @@ pipeline {
       defaultValue: '''python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 pip install --upgrade pip
+if [ -f agent/requirements-qa-base.txt ]; then pip install -r agent/requirements-qa-base.txt; fi
 if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results''',
+behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}"''',
       description: 'Command that runs the existing Python/Behave sanity script inside the Jenkins agent container.'
     )
   }
@@ -101,7 +102,7 @@ behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TAR
       }
       post {
         always {
-          archiveArtifacts artifacts: 'artifacts/connectivity/**', allowEmptyArchive: true
+          echo 'Connectivity check output was printed to the console.'
         }
       }
     }
@@ -123,8 +124,7 @@ behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TAR
       }
       post {
         always {
-          junit testResults: 'artifacts/test-results/**/*.xml', allowEmptyResults: true
-          archiveArtifacts artifacts: 'artifacts/**', allowEmptyArchive: true, fingerprint: true
+          echo 'QA sanity output was printed to the console.'
         }
       }
     }
