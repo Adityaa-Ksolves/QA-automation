@@ -23,6 +23,8 @@ set -a
 . "${env_file}"
 set +a
 
+qa_secret_dir_container="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
+
 required_vars=(
   JENKINS_URL
   JENKINS_AGENT_NAME
@@ -38,6 +40,18 @@ for var_name in "${required_vars[@]}"; do
 done
 
 mkdir -p "${workdir_host}"
+
+secret_mount_args=()
+if [[ -n "${QA_SECRET_DIR_HOST:-}" ]]; then
+  if [[ ! -d "${QA_SECRET_DIR_HOST}" ]]; then
+    echo "QA_SECRET_DIR_HOST is set but does not exist or is not a directory: ${QA_SECRET_DIR_HOST}" >&2
+    exit 1
+  fi
+  secret_mount_args=(
+    -v "${QA_SECRET_DIR_HOST}:${qa_secret_dir_container}:ro"
+    -e "QA_SECRET_DIR=${qa_secret_dir_container}"
+  )
+fi
 
 echo "Building ${image_name} from ${project_dir}/agent/Dockerfile"
 nerdctl build \
@@ -58,6 +72,7 @@ nerdctl run -d \
   --shm-size 2g \
   -v "${workdir_host}:/home/jenkins/agent" \
   -v "${project_dir}/scripts:/home/jenkins/agent/poc-scripts:ro" \
+  "${secret_mount_args[@]}" \
   "${image_name}" \
   -url "${JENKINS_URL}" \
   -secret "${JENKINS_SECRET}" \

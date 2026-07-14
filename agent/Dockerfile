@@ -2,6 +2,8 @@ FROM jenkins/inbound-agent:lts-jdk17
 
 USER root
 
+COPY agent/requirements-qa-base.txt /tmp/requirements-qa-base.txt
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -20,10 +22,15 @@ RUN apt-get update \
     unzip \
     wget \
     xvfb \
-  && rm -rf /var/lib/apt/lists/*
+  && python3 -m venv /opt/qa-venv \
+  && /opt/qa-venv/bin/pip install --upgrade pip \
+  && /opt/qa-venv/bin/pip install -r /tmp/requirements-qa-base.txt \
+  && rm -rf /var/lib/apt/lists/* /tmp/requirements-qa-base.txt
 
 ENV CHROME_BIN=/usr/bin/chromium \
     BROWSER=chrome \
+    PATH=/opt/qa-venv/bin:$PATH \
+    QA_SECRET_DIR=/home/jenkins/qa-secrets \
     WORKSPACE_ARTIFACT_DIR=artifacts
 
 USER jenkins
