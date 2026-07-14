@@ -48,6 +48,7 @@ printf "%-12s %s\n" "Started:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 section "Environment Setup"
 python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
+export PATH
 python -m pip install ${pip_quiet_flag} --upgrade pip
 if [[ -f "${base_requirements}" ]]; then
   echo "Installing base requirements: ${base_requirements}"
@@ -73,7 +74,7 @@ echo "${qa_command}"
 
 set +e
 section "QA Results"
-bash -lc "${qa_command}"
+bash -c "${qa_command}"
 exit_code="$?"
 set -e
 
