@@ -8,7 +8,7 @@ import urllib3
 from behave import given, then, use_step_matcher, when
 from cryptography.fernet import Fernet
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import ElementClickInterceptedException, TimeoutException
 from selenium.webdriver import Keys
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
@@ -105,7 +105,15 @@ def _find(context, locator_text=None, xpath=None, timeout=None):
 def _click(context, locator_text=None, xpath=None, timeout=None):
     by, value = _parse_locator(locator_text, xpath)
     element = _wait(context, timeout).until(EC.element_to_be_clickable((by, value)))
-    element.click()
+    context.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+    try:
+        element.click()
+    except ElementClickInterceptedException:
+        context.browser.switch_to.active_element.send_keys(Keys.ESCAPE)
+        time.sleep(0.5)
+        element = _wait(context, timeout).until(EC.element_to_be_clickable((by, value)))
+        context.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        element.click()
     return element
 
 
@@ -201,22 +209,29 @@ def step_enter_application_url(context, url):
 @when('I select "{language}" language')
 def step_select_language(context, language):
     resolved_language = _resolve(context, language)
-    candidates = [
-        (By.XPATH, f"//mat-select|//select"),
-        (By.XPATH, f"//*[normalize-space()='{resolved_language}']"),
-    ]
-    for by, value in candidates:
-        try:
-            element = _wait(context, 5).until(EC.presence_of_element_located((by, value)))
-            tag = element.tag_name.lower()
-            if tag == "select":
-                Select(element).select_by_visible_text(resolved_language)
-            else:
-                element.click()
-            _print_ui_result(context, "Language", "OK", resolved_language)
-            return
-        except Exception:
-            continue
+
+    try:
+        element = _wait(context, 3).until(EC.presence_of_element_located((By.XPATH, "//select")))
+        Select(element).select_by_visible_text(resolved_language)
+        _print_ui_result(context, "Language", "OK", resolved_language)
+        return
+    except Exception:
+        pass
+
+    try:
+        mat_select = _wait(context, 3).until(EC.element_to_be_clickable((By.XPATH, "//mat-select")))
+        mat_select.click()
+        option_xpath = (
+            f"//mat-option//span[normalize-space()='{resolved_language}']"
+            f"|//*[@role='option' and normalize-space()='{resolved_language}']"
+        )
+        option = _wait(context, 3).until(EC.element_to_be_clickable((By.XPATH, option_xpath)))
+        option.click()
+        _print_ui_result(context, "Language", "OK", resolved_language)
+        return
+    except Exception:
+        context.browser.switch_to.active_element.send_keys(Keys.ESCAPE)
+
     _print_ui_result(context, "Language", "SKIPPED", f"No selector found for {resolved_language}")
 
 
