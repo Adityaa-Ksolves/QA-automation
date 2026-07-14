@@ -55,7 +55,6 @@ On the Jenkins controller:
   - Pipeline
   - JUnit
   - Credentials Binding
-  - AnsiColor
 
 On the client/customer server:
 
@@ -85,8 +84,9 @@ In Jenkins:
    - `Pipeline`
    - `JUnit`
    - `Credentials Binding`
-   - `AnsiColor`
 4. Restart Jenkins if Jenkins asks for it.
+
+`AnsiColor` is optional. The POC Jenkinsfiles do not use `ansiColor('xterm')` because some Jenkins controllers do not expose it as a Declarative Pipeline option.
 
 ### 3.2 Create A Jenkins Node For One Customer
 
