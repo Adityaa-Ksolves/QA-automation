@@ -63,6 +63,16 @@ pipeline {
       defaultValue: '''behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
       description: 'Command passed to each customer job and executed inside that customer agent container.'
     )
+    string(
+      name: 'QA_PASSWORD_FERNET_CREDENTIALS_ID',
+      defaultValue: '',
+      description: 'Optional Jenkins Secret text credential ID containing the Fernet key used by each customer job.'
+    )
+    string(
+      name: 'APP_PASSWORD_CREDENTIALS_ID',
+      defaultValue: 'qa-app-password',
+      description: 'Jenkins Secret text credential ID containing the plain application password used by each customer job.'
+    )
   }
 
   stages {
@@ -83,7 +93,9 @@ pipeline {
                   string(name: 'ENVIRONMENT_URL', value: cfg.url),
                   string(name: 'BROWSER', value: params.BROWSER),
                   string(name: 'TEST_TAGS', value: tagExpression),
-                  text(name: 'QA_TEST_COMMAND', value: params.QA_TEST_COMMAND)
+                  text(name: 'QA_TEST_COMMAND', value: params.QA_TEST_COMMAND),
+                  string(name: 'QA_PASSWORD_FERNET_CREDENTIALS_ID', value: params.QA_PASSWORD_FERNET_CREDENTIALS_ID),
+                  string(name: 'APP_PASSWORD_CREDENTIALS_ID', value: params.APP_PASSWORD_CREDENTIALS_ID)
                 ]
             }
           }

@@ -53,6 +53,16 @@ pipeline {
       defaultValue: '''behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
       description: 'Command that runs the existing Python/Behave sanity script inside the Jenkins agent container.'
     )
+    string(
+      name: 'QA_PASSWORD_FERNET_CREDENTIALS_ID',
+      defaultValue: '',
+      description: 'Optional Jenkins Secret text credential ID containing the Fernet key used to decrypt encrypted passwords.'
+    )
+    string(
+      name: 'APP_PASSWORD_CREDENTIALS_ID',
+      defaultValue: 'qa-app-password',
+      description: 'Jenkins Secret text credential ID containing the plain application password. Used when Fernet key is unavailable.'
+    )
   }
 
   stages {
@@ -112,10 +122,36 @@ pipeline {
         QA_TEST_COMMAND = "${params.QA_TEST_COMMAND}"
       }
       steps {
-        sh '''
-          set -eu
-          ./scripts/run-qa-sanity.sh
-        '''
+        script {
+          def credentialsToBind = []
+          if (params.APP_PASSWORD_CREDENTIALS_ID?.trim()) {
+            credentialsToBind.add(string(
+              credentialsId: params.APP_PASSWORD_CREDENTIALS_ID,
+              variable: 'APP_PASSWORD'
+            ))
+          }
+          if (params.QA_PASSWORD_FERNET_CREDENTIALS_ID?.trim()) {
+            credentialsToBind.add(string(
+              credentialsId: params.QA_PASSWORD_FERNET_CREDENTIALS_ID,
+              variable: 'QA_PASSWORD_FERNET_KEY'
+            ))
+          }
+
+          if (credentialsToBind) {
+            withCredentials(credentialsToBind) {
+              sh '''
+                set +x
+                set -eu
+                ./scripts/run-qa-sanity.sh
+              '''
+            }
+          } else {
+            sh '''
+              set -eu
+              ./scripts/run-qa-sanity.sh
+            '''
+          }
+        }
       }
       post {
         always {

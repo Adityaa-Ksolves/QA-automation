@@ -33,6 +33,16 @@ printf "%-12s %s\n" "Target URL:" "${TARGET_URL}"
 printf "%-12s %s\n" "Browser:" "${BROWSER}"
 printf "%-12s %s\n" "Tags:" "${TEST_TAGS}"
 printf "%-12s %s\n" "Node:" "${NODE_NAME:-unknown}"
+if [[ -n "${QA_PASSWORD_FERNET_KEY:-}" ]]; then
+  printf "%-12s %s\n" "Fernet key:" "configured"
+else
+  printf "%-12s %s\n" "Fernet key:" "not configured"
+fi
+if [[ -n "${APP_PASSWORD:-}" ]]; then
+  printf "%-12s %s\n" "App pass:" "configured"
+else
+  printf "%-12s %s\n" "App pass:" "not configured"
+fi
 printf "%-12s %s\n" "Started:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 section "Environment Setup"
