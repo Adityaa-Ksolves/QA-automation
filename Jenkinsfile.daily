@@ -60,12 +60,7 @@ pipeline {
     )
     text(
       name: 'QA_TEST_COMMAND',
-      defaultValue: '''python3 -m venv --system-site-packages .venv
-. .venv/bin/activate
-pip install --upgrade pip
-if [ -f agent/requirements-qa-base.txt ]; then pip install -r agent/requirements-qa-base.txt; fi
-if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}"''',
+      defaultValue: '''behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
       description: 'Command passed to each customer job and executed inside that customer agent container.'
     )
   }

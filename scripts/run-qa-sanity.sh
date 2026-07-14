@@ -3,6 +3,14 @@ set -euo pipefail
 
 qa_command="${QA_TEST_COMMAND:-}"
 base_requirements="${QA_BASE_REQUIREMENTS:-agent/requirements-qa-base.txt}"
+pip_quiet_flag="${QA_PIP_QUIET_FLAG:---quiet}"
+
+section() {
+  echo
+  echo "============================================================"
+  echo "$1"
+  echo "============================================================"
+}
 
 if [[ -z "${qa_command}" ]]; then
   echo "QA_TEST_COMMAND is required." >&2
@@ -19,44 +27,53 @@ export TEST_TAGS="${TEST_TAGS:-}"
 export CUSTOMER="${CUSTOMER:-unknown}"
 export QA_SECRET_DIR="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
 
-echo "QA sanity run"
-echo "customer=${CUSTOMER}"
-echo "target_url=${TARGET_URL}"
-echo "browser=${BROWSER}"
-echo "test_tags=${TEST_TAGS}"
-echo "node=${NODE_NAME:-unknown}"
-echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo
-echo "Preparing Python QA environment"
+section "QA Sanity Run"
+printf "%-12s %s\n" "Customer:" "${CUSTOMER}"
+printf "%-12s %s\n" "Target URL:" "${TARGET_URL}"
+printf "%-12s %s\n" "Browser:" "${BROWSER}"
+printf "%-12s %s\n" "Tags:" "${TEST_TAGS}"
+printf "%-12s %s\n" "Node:" "${NODE_NAME:-unknown}"
+printf "%-12s %s\n" "Started:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+section "Environment Setup"
 python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
-python -m pip install --upgrade pip
+python -m pip install ${pip_quiet_flag} --upgrade pip
 if [[ -f "${base_requirements}" ]]; then
-  python -m pip install -r "${base_requirements}"
+  echo "Installing base requirements: ${base_requirements}"
+  python -m pip install ${pip_quiet_flag} -r "${base_requirements}"
 else
   echo "Base QA requirements file not found: ${base_requirements}" >&2
 fi
 if [[ -f requirements.txt ]]; then
-  python -m pip install -r requirements.txt
+  echo "Installing project requirements: requirements.txt"
+  python -m pip install ${pip_quiet_flag} -r requirements.txt
 fi
 if ! command -v behave >/dev/null 2>&1; then
   echo "behave is still not available after dependency installation." >&2
   exit 21
 fi
-echo "behave=$(command -v behave)"
-echo
-echo "Running QA command:"
+printf "%-12s %s\n" "Python:" "$(python --version 2>&1)"
+printf "%-12s %s\n" "Pip:" "$(python -m pip --version)"
+printf "%-12s %s\n" "Behave:" "$(behave --version)"
+printf "%-12s %s\n" "Behave bin:" "$(command -v behave)"
+
+section "QA Command"
 echo "${qa_command}"
-echo
 
 set +e
+section "QA Results"
 bash -lc "${qa_command}"
 exit_code="$?"
 set -e
 
-echo
-echo "QA command completed"
-echo "exit_code=${exit_code}"
-echo "completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+section "QA Summary"
+printf "%-12s %s\n" "Exit code:" "${exit_code}"
+printf "%-12s %s\n" "Completed:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if [[ "${exit_code}" -eq 0 ]]; then
+  echo "Status: PASS"
+else
+  echo "Status: FAIL"
+fi
 
 exit "${exit_code}"
