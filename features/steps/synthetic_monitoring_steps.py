@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 import urllib3
-from behave import given, then, when
+from behave import given, then, use_step_matcher, when
 from cryptography.fernet import Fernet
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -190,6 +190,7 @@ def step_launch_browser(context, browser_name):
 
 @given('I enter the Application url "{url}"')
 @when('I enter the Application url "{url}"')
+@then('I enter the Application url "{url}"')
 def step_enter_application_url(context, url):
     resolved_url = _resolve(context, url)
     context.browser.get(resolved_url)
@@ -311,7 +312,12 @@ def step_capture_text(context, attribute, xpath, session_key):
     _print_ui_result(context, session_key, "CAPTURED", captured)
 
 
-@then('I make sure that "{left}" "{operator}" "{right}"')
+use_step_matcher("re")
+
+
+@then(r'I make sure that "(?P<left>.+)" "(?P<operator>equals|not equals)" "(?P<right>.+)"')
+@when(r'I make sure that "(?P<left>.+)" "(?P<operator>equals|not equals)" "(?P<right>.+)"')
+@given(r'I make sure that "(?P<left>.+)" "(?P<operator>equals|not equals)" "(?P<right>.+)"')
 def step_compare_values(context, left, operator, right):
     resolved_left = _resolve(context, left)
     resolved_right = _resolve(context, right)
@@ -320,6 +326,9 @@ def step_compare_values(context, left, operator, right):
     if operator == "equals" and resolved_left != resolved_right:
         raise AssertionError(f"Expected values to match: {resolved_left} != {resolved_right}")
     _print_ui_result(context, "Compare", "OK", f"{operator}")
+
+
+use_step_matcher("parse")
 
 
 @when('I select "{menu_item}" from the hamburger menu')

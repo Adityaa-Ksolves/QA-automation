@@ -50,7 +50,7 @@ pipeline {
     )
     text(
       name: 'QA_TEST_COMMAND',
-      defaultValue: '''behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
+      defaultValue: '''behave features/ui_synthetic_monitoring.feature --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
       description: 'Command that runs the existing Python/Behave sanity script inside the Jenkins agent container.'
     )
     string(

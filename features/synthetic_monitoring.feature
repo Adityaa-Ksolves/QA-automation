@@ -1,4 +1,4 @@
-@synthetic_monitoring
+@synthetic_http
 Feature: Customer endpoint synthetic monitoring
 
   @customer_piedmont
