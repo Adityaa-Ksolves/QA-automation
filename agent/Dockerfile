@@ -1,4 +1,5 @@
-FROM jenkins/inbound-agent:lts-jdk17
+ARG JENKINS_AGENT_BASE_IMAGE=jenkins/inbound-agent:latest-jdk17
+FROM ${JENKINS_AGENT_BASE_IMAGE}
 
 USER root
 

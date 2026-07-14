@@ -24,6 +24,7 @@ set -a
 set +a
 
 qa_secret_dir_container="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
+network_mode="${NERDCTL_NETWORK_MODE:-host}"
 
 required_vars=(
   JENKINS_URL
@@ -59,15 +60,29 @@ nerdctl build \
   -f "${project_dir}/agent/Dockerfile" \
   "${project_dir}"
 
+echo "Removing any existing container named ${JENKINS_AGENT_NAME}"
+nerdctl rm -f "${JENKINS_AGENT_NAME}" >/dev/null 2>&1 || true
+
 if nerdctl ps -a --format '{{.Names}}' | grep -Fxq "${JENKINS_AGENT_NAME}"; then
-  echo "Removing existing container ${JENKINS_AGENT_NAME}"
-  nerdctl rm -f "${JENKINS_AGENT_NAME}"
+  cat >&2 <<EOF
+Container name ${JENKINS_AGENT_NAME} is still reserved after nerdctl rm -f.
+
+Manual cleanup commands:
+  nerdctl --namespace default ps -a | grep ${JENKINS_AGENT_NAME} || true
+  ctr -n default tasks kill ${JENKINS_AGENT_NAME} || true
+  ctr -n default tasks rm ${JENKINS_AGENT_NAME} || true
+  ctr -n default containers rm ${JENKINS_AGENT_NAME} || true
+
+After cleanup, run this script again.
+EOF
+  exit 1
 fi
 
-echo "Starting Jenkins inbound agent ${JENKINS_AGENT_NAME}"
+echo "Starting Jenkins inbound agent ${JENKINS_AGENT_NAME} with network mode ${network_mode}"
 nerdctl run -d \
   --name "${JENKINS_AGENT_NAME}" \
   --restart unless-stopped \
+  --net "${network_mode}" \
   --env-file "${env_file}" \
   --shm-size 2g \
   -v "${workdir_host}:/home/jenkins/agent" \

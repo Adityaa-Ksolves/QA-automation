@@ -189,6 +189,7 @@ JENKINS_AGENT_NAME=qa-agent-piedmont
 JENKINS_SECRET=<secret from Jenkins node page>
 CUSTOMER_KEY=piedmont
 BROWSER=chrome
+NERDCTL_NETWORK_MODE=host
 
 # Optional: mount decryption config/keys for encrypted passwords.
 # QA_SECRET_DIR_HOST=/secure/path/customer-qa-secrets
@@ -201,6 +202,7 @@ Important:
 - `JENKINS_AGENT_NAME` must exactly match the Jenkins node name.
 - `JENKINS_SECRET` must come from that Jenkins node page.
 - `CUSTOMER_KEY` should match the customer selected in the Jenkins pipeline.
+- `NERDCTL_NETWORK_MODE=host` is recommended for this POC because the container should use the client server's existing VPN/private routes and does not need nerdctl bridge CNI plugins.
 - `QA_SECRET_DIR_HOST` should point to a secure host directory only when the QA framework needs decryption config or keys for encrypted passwords.
 
 ### 5.2 Confirm Python/Behave Requirements
@@ -243,6 +245,14 @@ pip install -r requirements.txt
 
 ### 5.3 Start The Agent With nerdctl
 
+First confirm the Jenkins inbound agent base image can be pulled:
+
+```bash
+nerdctl pull jenkins/inbound-agent:latest-jdk17
+```
+
+If Docker Hub is blocked from the client server, mirror this image to your private registry and build with a custom `JENKINS_AGENT_BASE_IMAGE`.
+
 Build and start the container:
 
 ```bash
@@ -255,7 +265,7 @@ The script performs these actions:
 - validates required Jenkins agent values
 - builds the image with `nerdctl build`
 - removes an old container with the same agent name, if one exists
-- starts the inbound Jenkins agent container with `nerdctl run`
+- starts the inbound Jenkins agent container with `nerdctl run --net host`
 - mounts a persistent work directory at `/home/jenkins/agent`
 - mounts `scripts/` read-only at `/home/jenkins/agent/poc-scripts`
 - mounts `QA_SECRET_DIR_HOST` read-only when it is configured
@@ -267,12 +277,22 @@ The equivalent manual build command is:
 nerdctl build -t qa-jenkins-inbound-agent:latest -f agent/Dockerfile .
 ```
 
+To build from a private registry mirror:
+
+```bash
+nerdctl build \
+  --build-arg JENKINS_AGENT_BASE_IMAGE=registry.example.com/jenkins/inbound-agent:latest-jdk17 \
+  -t qa-jenkins-inbound-agent:latest \
+  -f agent/Dockerfile .
+```
+
 The equivalent manual run command is:
 
 ```bash
 nerdctl run -d \
   --name qa-agent-piedmont \
   --restart unless-stopped \
+  --net host \
   --env-file agent/.env \
   --shm-size 2g \
   -v "$(pwd)/.agent-workdir:/home/jenkins/agent" \
@@ -733,6 +753,97 @@ Common causes:
 - Wrong `JENKINS_SECRET`.
 - Client server cannot reach Jenkins.
 - Jenkins inbound agent port or WebSocket configuration is blocked.
+
+### Agent Container Name Is Stuck
+
+If startup fails with an error like:
+
+```text
+failed re-acquiring name
+name "qa-agent-piedmont" is already used
+```
+
+remove the stale container name:
+
+```bash
+nerdctl rm -f qa-agent-piedmont || true
+nerdctl ps -a | grep qa-agent-piedmont || true
+```
+
+If the name still appears, inspect containerd directly:
+
+```bash
+nerdctl --namespace default ps -a | grep qa-agent-piedmont || true
+ctr -n default containers ls | grep qa-agent-piedmont || true
+ctr -n default tasks ls | grep qa-agent-piedmont || true
+```
+
+Remove the stale task/container:
+
+```bash
+ctr -n default tasks kill qa-agent-piedmont || true
+ctr -n default tasks rm qa-agent-piedmont || true
+ctr -n default containers rm qa-agent-piedmont || true
+```
+
+Then rerun:
+
+```bash
+./agent/start-agent-nerdctl.sh
+```
+
+### nerdctl Bridge CNI Is Missing
+
+If startup fails with:
+
+```text
+failed to call cni.Setup: plugin type="bridge" failed (add): failed to find plugin "bridge" in path [/opt/cni/bin]
+```
+
+nerdctl is trying to use bridge networking, but CNI plugins are not installed on the client server. For this POC, use host networking:
+
+```bash
+NERDCTL_NETWORK_MODE=host
+```
+
+The start script uses host networking by default. Host networking is appropriate here because the agent container needs outbound access to Jenkins and the customer application through the client server's existing VPN/private routes. It does not need inbound ports.
+
+If host networking is not allowed later, install and configure the required CNI plugins on the client server instead of using `--net host`.
+
+### Agent Image Build Fails
+
+If the build fails with an error like this:
+
+```text
+failed to resolve source metadata for docker.io/jenkins/inbound-agent:lts-jdk17
+```
+
+the base image tag is wrong or unavailable from the client server. The POC uses:
+
+```text
+jenkins/inbound-agent:latest-jdk17
+```
+
+Validate the pull:
+
+```bash
+nerdctl pull jenkins/inbound-agent:latest-jdk17
+```
+
+If the pull succeeds, rebuild:
+
+```bash
+./agent/start-agent-nerdctl.sh
+```
+
+If the pull fails because Docker Hub is blocked, mirror the image into your private registry and build with:
+
+```bash
+nerdctl build \
+  --build-arg JENKINS_AGENT_BASE_IMAGE=registry.example.com/jenkins/inbound-agent:latest-jdk17 \
+  -t qa-jenkins-inbound-agent:latest \
+  -f agent/Dockerfile .
+```
 
 ### DNS Check Fails
 
