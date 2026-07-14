@@ -1,0 +1,101 @@
+def customers = [
+  'piedmont': [
+    url: 'https://piedmont.nimblethis.net/',
+    tag: '@customer_piedmont'
+  ],
+  'zito': [
+    url: 'https://nimble-web.zitomedia.net/',
+    tag: '@customer_zito'
+  ],
+  'brctv': [
+    url: 'https://brctv.pnm.openvault.net/',
+    tag: '@customer_brctv'
+  ],
+  'comporium': [
+    url: 'https://comporiumv5.nimblethis.net/',
+    tag: '@customer_comporium'
+  ],
+  'sectv': [
+    url: 'http://sectv.vantage.openvault.net/',
+    tag: '@customer_sectv'
+  ],
+  'secv': [
+    url: 'https://secv.pnm.openvault.net/',
+    tag: '@customer_secv'
+  ],
+  'wow-trial': [
+    url: 'https://wow-vantage-trial.openvault.net/',
+    tag: '@customer_wow_trial'
+  ]
+]
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    ansiColor('xterm')
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+  }
+
+  triggers {
+    cron('H 6 * * *')
+  }
+
+  parameters {
+    string(
+      name: 'SINGLE_CUSTOMER_JOB',
+      defaultValue: 'qa-vpn-sanity-poc',
+      description: 'Existing Jenkins job that uses jenkins-vpn-qa-poc/Jenkinsfile.'
+    )
+    choice(
+      name: 'BROWSER',
+      choices: ['chrome', 'chromium', 'firefox'],
+      description: 'Browser requested by the QA automation.'
+    )
+    string(
+      name: 'BASE_TAGS',
+      defaultValue: '@synthetic_monitoring',
+      description: 'Base Behave tag expression combined with each customer tag.'
+    )
+    text(
+      name: 'QA_TEST_COMMAND',
+      defaultValue: '''python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+pip install --upgrade pip
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results''',
+      description: 'Command passed to each customer job and executed inside that customer agent container.'
+    )
+  }
+
+  stages {
+    stage('Trigger Customer Sanity Jobs') {
+      steps {
+        script {
+          def branches = [:]
+
+          customers.each { customerKey, cfg ->
+            branches[customerKey] = {
+              def tagExpression = "${params.BASE_TAGS} and ${cfg.tag}"
+              echo "Triggering ${params.SINGLE_CUSTOMER_JOB} for ${customerKey} with ${tagExpression}"
+              build job: params.SINGLE_CUSTOMER_JOB,
+                wait: true,
+                propagate: true,
+                parameters: [
+                  string(name: 'CUSTOMER', value: customerKey),
+                  string(name: 'ENVIRONMENT_URL', value: cfg.url),
+                  string(name: 'BROWSER', value: params.BROWSER),
+                  string(name: 'TEST_TAGS', value: tagExpression),
+                  text(name: 'QA_TEST_COMMAND', value: params.QA_TEST_COMMAND)
+                ]
+            }
+          }
+
+          parallel branches
+        }
+      }
+    }
+  }
+}

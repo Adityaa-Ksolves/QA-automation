@@ -14,7 +14,9 @@ The model is:
 ## Contents
 
 - `Jenkinsfile` - parameterized pipeline for customer-routed sanity runs.
+- `Jenkinsfile.daily` - daily fan-out pipeline that triggers one customer-scoped run per customer.
 - `agent/Dockerfile` - reusable Jenkins inbound agent image with network test utilities and browser dependencies.
+- `agent/requirements-qa-base.txt` - base Python packages installed into the agent image for Behave/Selenium automation.
 - `agent/start-agent-nerdctl.sh` - builds and starts one Jenkins inbound agent using `nerdctl`.
 - `agent/stop-agent-nerdctl.sh` - stops and removes the customer agent container.
 - `agent/logs-agent-nerdctl.sh` - follows agent container logs.
@@ -24,6 +26,9 @@ The model is:
 - `config/customers.yaml.example` - customer inventory and label convention.
 - `scripts/connectivity-check.sh` - DNS, TCP/TLS, and HTTP reachability validation.
 - `scripts/run-qa-sanity.sh` - wrapper for invoking the existing QA automation command.
+- `scripts/tag-synthetic-monitoring-feature.py` - generates a customer-tagged copy of the multi-customer Behave feature.
+- `scripts/validate-customer-tags.sh` - verifies the synthetic monitoring feature has required customer tags.
+- `docs/customer-tagging.md` - how to split multi-customer Behave examples into customer-tagged blocks.
 - `docs/runbook.md` - setup, onboarding, validation, and operations runbook.
 - `docs/security-and-isolation.md` - security controls for multi-customer execution.
 
@@ -34,7 +39,8 @@ On the Jenkins controller:
 1. Create a Jenkins node for each customer using inbound agent mode.
 2. Use node labels matching `customer-<customer-key>`, such as `customer-piedmont`.
 3. Store customer application credentials in Jenkins Credentials.
-4. Create a pipeline job using `Jenkinsfile` from this repository.
+4. Create a single-customer pipeline job using `Jenkinsfile` from this repository.
+5. Create the optional daily fan-out job using `Jenkinsfile.daily`.
 
 On each client/customer server:
 
@@ -57,11 +63,16 @@ In Jenkins:
 1. Run the pipeline.
 2. Select `CUSTOMER`.
 3. Provide the `ENVIRONMENT_URL`.
-4. Provide the real QA command in `QA_TEST_COMMAND`, or set it in the job definition.
+4. Provide `TEST_TAGS` with both tags, for example `@synthetic_monitoring and @customer_piedmont`.
+5. Provide the real QA command in `QA_TEST_COMMAND`, or use the default Python/Behave command.
 
 Example QA command:
 
 ```bash
+python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+pip install --upgrade pip
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results
 ```
 

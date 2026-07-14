@@ -6,7 +6,7 @@
 - Use one Jenkins node label per customer.
 - Set each customer node to one executor unless parallel testing is explicitly approved.
 - Store Jenkins agent secrets outside source control.
-- Store application usernames, passwords, tokens, VPN material, and private CA files in Jenkins Credentials or customer-side secret storage.
+- Store application usernames, passwords, tokens, VPN material, encrypted-password decryption config, and private CA files in Jenkins Credentials or customer-side secret storage.
 - Mask credentials in Jenkins console output.
 - Do not store real customer passwords in feature files.
 - Restrict job permissions so QA users can run approved jobs without administering nodes or credentials.
@@ -44,8 +44,11 @@ Recommended Jenkins credential types:
 - Secret text for tokens.
 - Username/password for application login.
 - Secret file for private CA bundles or customer-specific config files.
+- Secret file or customer-side secure directory for encrypted-password decryption config.
 
 Pass secrets to the QA command using Jenkins credential bindings, then map them to environment variables expected by the test framework.
+
+For the current POC, encrypted password values remain in the Behave feature. Mount the decryption config into the agent container read-only with `QA_SECRET_DIR_HOST`, and configure the QA framework to read from `QA_SECRET_DIR`.
 
 Do not echo secrets. Do not use shell tracing with `set -x` in stages that handle credentials.
 

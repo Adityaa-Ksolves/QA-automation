@@ -8,6 +8,16 @@ def customerLabels = [
   'wow-trial': 'customer-wow-trial'
 ]
 
+def customerTags = [
+  'piedmont': '@customer_piedmont',
+  'zito': '@customer_zito',
+  'brctv': '@customer_brctv',
+  'comporium': '@customer_comporium',
+  'sectv': '@customer_sectv',
+  'secv': '@customer_secv',
+  'wow-trial': '@customer_wow_trial'
+]
+
 pipeline {
   agent none
 
@@ -36,13 +46,17 @@ pipeline {
     )
     string(
       name: 'TEST_TAGS',
-      defaultValue: '@synthetic_monitoring',
-      description: 'Optional test tags or filters passed to the QA automation.'
+      defaultValue: '@synthetic_monitoring and @customer_piedmont',
+      description: 'Behave tag expression. Must include the selected customer tag, for example @customer_piedmont.'
     )
-    string(
+    text(
       name: 'QA_TEST_COMMAND',
-      defaultValue: '',
-      description: 'Command that runs the existing QA sanity script. If blank, the wrapper fails with setup guidance.'
+      defaultValue: '''python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+pip install --upgrade pip
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results''',
+      description: 'Command that runs the existing Python/Behave sanity script inside the Jenkins agent container.'
     )
   }
 
@@ -54,16 +68,25 @@ pipeline {
           if (!customerLabels.containsKey(params.CUSTOMER)) {
             error "Unknown CUSTOMER '${params.CUSTOMER}'. Add it to customerLabels in Jenkinsfile."
           }
+          if (!customerTags.containsKey(params.CUSTOMER)) {
+            error "Unknown CUSTOMER '${params.CUSTOMER}'. Add it to customerTags in Jenkinsfile."
+          }
           if (!params.ENVIRONMENT_URL?.trim()) {
             error 'ENVIRONMENT_URL is required.'
           }
+          if (!params.TEST_TAGS?.contains(customerTags[params.CUSTOMER])) {
+            error "TEST_TAGS must include ${customerTags[params.CUSTOMER]} so this job only runs rows for ${params.CUSTOMER}."
+          }
           env.CUSTOMER_LABEL = customerLabels[params.CUSTOMER]
+          env.CUSTOMER_TAG = customerTags[params.CUSTOMER]
         }
         sh '''
           set -eu
           echo "Customer: ${CUSTOMER}"
           echo "Jenkins node: ${NODE_NAME}"
           echo "Expected label: ${CUSTOMER_LABEL}"
+          echo "Expected Behave customer tag: ${CUSTOMER_TAG}"
+          echo "Behave tags: ${TEST_TAGS}"
           echo "Target URL: ${ENVIRONMENT_URL}"
         '''
       }

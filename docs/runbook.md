@@ -189,6 +189,10 @@ JENKINS_AGENT_NAME=qa-agent-piedmont
 JENKINS_SECRET=<secret from Jenkins node page>
 CUSTOMER_KEY=piedmont
 BROWSER=chrome
+
+# Optional: mount decryption config/keys for encrypted passwords.
+# QA_SECRET_DIR_HOST=/secure/path/customer-qa-secrets
+# QA_SECRET_DIR=/home/jenkins/qa-secrets
 ```
 
 Important:
@@ -197,10 +201,11 @@ Important:
 - `JENKINS_AGENT_NAME` must exactly match the Jenkins node name.
 - `JENKINS_SECRET` must come from that Jenkins node page.
 - `CUSTOMER_KEY` should match the customer selected in the Jenkins pipeline.
+- `QA_SECRET_DIR_HOST` should point to a secure host directory only when the QA framework needs decryption config or keys for encrypted passwords.
 
 ### 5.2 Confirm Python/Behave Requirements
 
-The agent image includes network tools, Chromium browser dependencies, and the basic Python runtime needed for Behave-based automation.
+The agent image includes network tools, Chromium browser dependencies, Chromium driver, and a base Python virtualenv for Behave-based automation.
 
 For Python/Behave automation, make sure the image or job command has:
 
@@ -208,10 +213,11 @@ For Python/Behave automation, make sure the image or job command has:
 - `python3-pip`
 - `python3-venv`
 - `behave`
-- Selenium or Playwright dependencies used by your framework
-- Chrome/Chromium driver dependency if your framework requires a separate driver
+- Selenium dependencies used by your framework
+- `cryptography` for frameworks that decrypt encrypted password values
+- Chrome/Chromium driver dependency
 
-The POC image already installs the base operating-system packages:
+The POC image installs the base operating-system packages and Python packages from `agent/requirements-qa-base.txt`:
 
 ```dockerfile
 RUN apt-get update \
@@ -221,13 +227,15 @@ RUN apt-get update \
     python3 \
     python3-pip \
     python3-venv \
+  && python3 -m venv /opt/qa-venv \
+  && /opt/qa-venv/bin/pip install -r /tmp/requirements-qa-base.txt \
   && rm -rf /var/lib/apt/lists/*
 ```
 
-If your QA repository has `requirements.txt`, install Python framework dependencies during the Jenkins job instead of baking every Python package into the image:
+If your QA repository has `requirements.txt`, install project-specific dependencies during the Jenkins job:
 
 ```bash
-python3 -m venv .venv
+python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -250,6 +258,7 @@ The script performs these actions:
 - starts the inbound Jenkins agent container with `nerdctl run`
 - mounts a persistent work directory at `/home/jenkins/agent`
 - mounts `scripts/` read-only at `/home/jenkins/agent/poc-scripts`
+- mounts `QA_SECRET_DIR_HOST` read-only when it is configured
 - sets `--shm-size 2g` for browser stability
 
 The equivalent manual build command is:
@@ -268,6 +277,7 @@ nerdctl run -d \
   --shm-size 2g \
   -v "$(pwd)/.agent-workdir:/home/jenkins/agent" \
   -v "$(pwd)/scripts:/home/jenkins/agent/poc-scripts:ro" \
+  -v "/secure/path/customer-qa-secrets:/home/jenkins/qa-secrets:ro" \
   qa-jenkins-inbound-agent:latest \
   -url "https://jenkins.example.com/" \
   -secret "<secret from Jenkins node page>" \
@@ -356,10 +366,10 @@ behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TAR
 Behave command with virtual environment:
 
 ```bash
-python3 -m venv .venv
+python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results
 ```
 
@@ -370,6 +380,42 @@ behave path/to/features/synthetic_monitoring.feature --tags "${TEST_TAGS}" -D br
 ```
 
 Use the command that matches the existing QA framework.
+
+### 6.1 Customer Tags Are Required
+
+The daily `@synthetic_monitoring` feature contains rows for multiple customers. Do not run only `@synthetic_monitoring` from a customer-specific agent, because that can make one customer container try every customer URL.
+
+Use a customer tag with the base tag:
+
+```bash
+@synthetic_monitoring and @customer_piedmont
+```
+
+Required tag mapping:
+
+| Customer | Required Tag |
+| --- | --- |
+| `piedmont` | `@customer_piedmont` |
+| `zito` | `@customer_zito` |
+| `brctv` | `@customer_brctv` |
+| `comporium` | `@customer_comporium` |
+| `sectv` | `@customer_sectv` |
+| `secv` | `@customer_secv` |
+| `wow-trial` | `@customer_wow_trial` |
+
+Split each Scenario Outline Examples table into customer-tagged Examples blocks. See `docs/customer-tagging.md`.
+
+To generate a tagged copy for review:
+
+```bash
+./scripts/tag-synthetic-monitoring-feature.py path/to/synthetic_monitoring.feature /tmp/synthetic_monitoring.tagged.feature
+```
+
+Validate the feature before enabling daily runs:
+
+```bash
+./scripts/validate-customer-tags.sh path/to/synthetic_monitoring.feature
+```
 
 ## 7. Create The Jenkins Pipeline Job
 
@@ -437,6 +483,40 @@ must run on:
 customer-piedmont
 ```
 
+The `Jenkinsfile` also validates that `TEST_TAGS` includes the selected customer tag.
+
+### 7.4 Create Daily Fan-Out Job
+
+Create a second Jenkins Pipeline job for the daily sanity schedule.
+
+Recommended job name:
+
+```text
+qa-vpn-sanity-daily
+```
+
+Configure it with:
+
+```text
+Script path: jenkins-vpn-qa-poc/Jenkinsfile.daily
+```
+
+This daily job does not run Behave directly. It triggers the single-customer job once per customer and passes:
+
+- `CUSTOMER`
+- `ENVIRONMENT_URL`
+- `BROWSER`
+- `TEST_TAGS`
+- `QA_TEST_COMMAND`
+
+The daily job uses this schedule by default:
+
+```text
+H 6 * * *
+```
+
+Each child build runs inside that customer's Jenkins agent container.
+
 ## 8. Run The First POC Test
 
 Open the Jenkins job and click `Build with Parameters`.
@@ -447,8 +527,12 @@ Example values:
 CUSTOMER: piedmont
 ENVIRONMENT_URL: https://piedmont.nimblethis.net/
 BROWSER: chrome
-TEST_TAGS: @synthetic_monitoring
-QA_TEST_COMMAND: behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results
+TEST_TAGS: @synthetic_monitoring and @customer_piedmont
+QA_TEST_COMMAND: python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+pip install --upgrade pip
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+behave features --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --junit --junit-directory artifacts/test-results
 ```
 
 Click `Build`.
@@ -468,6 +552,8 @@ In Jenkins console output, confirm:
 ```text
 Customer: piedmont
 Expected label: customer-piedmont
+Expected Behave customer tag: @customer_piedmont
+Behave tags: @synthetic_monitoring and @customer_piedmont
 Target URL: https://piedmont.nimblethis.net/
 ```
 
@@ -556,6 +642,16 @@ Important:
 - Do not echo usernames/passwords.
 - Keep feature files free of real passwords.
 
+For the current POC, the feature keeps encrypted password values. The container must still receive the decryption configuration that the QA framework already uses on QA workstations.
+
+Recommended approach:
+
+1. Place the decryption config/key files on the client server in a secure directory.
+2. Set `QA_SECRET_DIR_HOST` in `agent/.env`.
+3. Start the agent with `./agent/start-agent-nerdctl.sh`.
+4. The directory is mounted read-only into the container at `QA_SECRET_DIR`, default `/home/jenkins/qa-secrets`.
+5. Configure the QA framework to read its decryption material from `QA_SECRET_DIR`.
+
 ## 11. Onboard Another Customer
 
 Repeat this process for each customer.
@@ -597,6 +693,7 @@ BROWSER=chrome
 ```text
 CUSTOMER: zito
 ENVIRONMENT_URL: https://nimble-web.zitomedia.net/
+TEST_TAGS: @synthetic_monitoring and @customer_zito
 ```
 
 8. Confirm the build runs on `qa-agent-zito`.

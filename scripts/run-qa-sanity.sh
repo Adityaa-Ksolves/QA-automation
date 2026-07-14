@@ -25,7 +25,7 @@ if [[ -z "${qa_command}" ]]; then
     echo "QA_TEST_COMMAND is required."
     echo "Set it in the Jenkins parameter or job configuration to the existing QA sanity command."
     echo "Example:"
-    echo "./gradlew test -Dcucumber.filter.tags='@synthetic_monitoring' -Dbrowser=chrome"
+    echo "behave features --tags \"\${TEST_TAGS}\" -D browser=\"\${BROWSER}\" -D endpoint=\"\${TARGET_URL}\" --junit --junit-directory artifacts/test-results"
   } | tee "${log_dir}/qa-command-missing.log"
   exit 20
 fi
@@ -35,6 +35,7 @@ export ENVIRONMENT_URL="${ENVIRONMENT_URL:-${TARGET_URL}}"
 export BROWSER="${BROWSER:-chrome}"
 export TEST_TAGS="${TEST_TAGS:-}"
 export CUSTOMER="${CUSTOMER:-unknown}"
+export QA_SECRET_DIR="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
 export WORKSPACE_ARTIFACT_DIR="${artifact_root}"
 
 echo "Running QA command for ${CUSTOMER} against ${TARGET_URL}" | tee "${log_dir}/qa-command.log"
