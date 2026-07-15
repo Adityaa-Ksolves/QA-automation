@@ -54,6 +54,11 @@ pipeline {
       description: 'Browser requested by the QA automation.'
     )
     string(
+      name: 'APP_USERNAME',
+      defaultValue: '',
+      description: 'Application username passed to customer jobs for parameterized login-smoke tests.'
+    )
+    string(
       name: 'BASE_TAGS',
       defaultValue: '@synthetic_monitoring',
       description: 'Base Behave tag expression combined with each customer tag.'
@@ -92,6 +97,7 @@ pipeline {
                   string(name: 'CUSTOMER', value: customerKey),
                   string(name: 'ENVIRONMENT_URL', value: cfg.url),
                   string(name: 'BROWSER', value: params.BROWSER),
+                  string(name: 'APP_USERNAME', value: params.APP_USERNAME),
                   string(name: 'TEST_TAGS', value: tagExpression),
                   text(name: 'QA_TEST_COMMAND', value: params.QA_TEST_COMMAND),
                   string(name: 'QA_PASSWORD_FERNET_CREDENTIALS_ID', value: params.QA_PASSWORD_FERNET_CREDENTIALS_ID),

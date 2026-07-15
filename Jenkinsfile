@@ -44,6 +44,11 @@ pipeline {
       description: 'Browser requested by the QA automation.'
     )
     string(
+      name: 'APP_USERNAME',
+      defaultValue: '',
+      description: 'Application username for parameterized login-smoke tests such as vantage_test_login.feature.'
+    )
+    string(
       name: 'TEST_TAGS',
       defaultValue: '@synthetic_monitoring and @customer_piedmont',
       description: 'Behave tag expression. Must include the selected customer tag, for example @customer_piedmont.'
@@ -93,6 +98,7 @@ pipeline {
           echo "Expected Behave customer tag: ${CUSTOMER_TAG}"
           echo "Behave tags: ${TEST_TAGS}"
           echo "Target URL: ${ENVIRONMENT_URL}"
+          if [ -n "${APP_USERNAME:-}" ]; then echo "App username: ${APP_USERNAME}"; fi
         '''
       }
     }
@@ -118,6 +124,7 @@ pipeline {
         CUSTOMER = "${params.CUSTOMER}"
         TARGET_URL = "${params.ENVIRONMENT_URL}"
         BROWSER = "${params.BROWSER}"
+        APP_USERNAME = "${params.APP_USERNAME}"
         TEST_TAGS = "${params.TEST_TAGS}"
         QA_TEST_COMMAND = "${params.QA_TEST_COMMAND}"
       }
