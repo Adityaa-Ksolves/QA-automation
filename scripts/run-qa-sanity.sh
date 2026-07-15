@@ -8,6 +8,7 @@ artifacts_dir="${QA_ARTIFACTS_DIR:-artifacts}"
 log_dir="${artifacts_dir}/logs"
 test_results_dir="${artifacts_dir}/test-results"
 raw_log="${log_dir}/qa-raw.log"
+html_report="${artifacts_dir}/Results.html"
 stream_raw_log="${QA_STREAM_RAW_LOG:-0}"
 
 section() {
@@ -53,6 +54,7 @@ fi
 printf "%-12s %s\n" "Started:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf "%-12s %s\n" "Raw log:" "${raw_log}"
 printf "%-12s %s\n" "JUnit:" "${test_results_dir}"
+printf "%-12s %s\n" "HTML:" "${html_report}"
 
 section "Environment Setup"
 python3 -m venv --system-site-packages .venv
@@ -95,12 +97,17 @@ set -e
 
 section "QA Result Table"
 if compgen -G "${test_results_dir}/*.xml" >/dev/null; then
-  python - "${test_results_dir}" <<'PY'
+  python - "${test_results_dir}" "${html_report}" "${raw_log}" "${artifacts_dir}" <<'PY'
+import html
 import os
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 
 results_dir = sys.argv[1]
+html_report = sys.argv[2]
+raw_log = sys.argv[3]
+artifacts_dir = sys.argv[4]
 rows = []
 problem_rows = []
 total = failed = errored = skipped = 0
@@ -139,20 +146,21 @@ for name in sorted(os.listdir(results_dir)):
             status = "SKIP"
         classname = case.attrib.get("classname", "")
         scenario = case.attrib.get("name", "")
-        duration = case.attrib.get("time", "0")
-        rows.append((status, classname, scenario, duration))
+        duration = float(case.attrib.get("time", "0") or 0)
         problem = case.find("error")
         if problem is None:
             problem = case.find("failure")
+        message = ""
         if problem is not None:
             message = problem.attrib.get("message") or first_error_line(problem.text)
             problem_rows.append((status, scenario, message))
+        rows.append((status, classname, scenario, duration, message))
 
 print(f"{'Status':<8} {'Time(s)':<8} Scenario")
 print(f"{'-' * 8} {'-' * 8} {'-' * 60}")
-for status, classname, scenario, duration in rows:
+for status, classname, scenario, duration, _message in rows:
     label = f"{classname} - {scenario}" if classname else scenario
-    print(f"{status:<8} {duration:<8} {label}")
+    print(f"{status:<8} {duration:<8.2f} {label}")
 
 print("")
 print(f"Total: {total}  Passed: {total - failed - errored - skipped}  Failed: {failed}  Errors: {errored}  Skipped: {skipped}")
@@ -165,6 +173,130 @@ if problem_rows:
         print(f"{status}: {scenario}")
         if message:
             print(f"  {message}")
+
+def rel(path):
+    return html.escape(os.path.relpath(path, artifacts_dir))
+
+def diagnostic_links():
+    diag_dir = os.path.join(artifacts_dir, "ui-diagnostics")
+    if not os.path.isdir(diag_dir):
+        return []
+    files = []
+    for name in sorted(os.listdir(diag_dir)):
+        if name.endswith((".png", ".html")):
+            files.append(os.path.join(diag_dir, name))
+    return files
+
+def status_class(status):
+    return {
+        "PASS": "pass",
+        "FAIL": "fail",
+        "ERROR": "error",
+        "SKIP": "skip",
+    }.get(status, "unknown")
+
+passed = total - failed - errored - skipped
+completed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+diagnostics = diagnostic_links()
+
+rows_html = []
+for status, classname, scenario, duration, message in rows:
+    label = f"{classname} - {scenario}" if classname else scenario
+    rows_html.append(
+        "<tr>"
+        f"<td><span class='badge {status_class(status)}'>{html.escape(status)}</span></td>"
+        f"<td>{duration:.2f}</td>"
+        f"<td>{html.escape(label)}</td>"
+        f"<td>{html.escape(message)}</td>"
+        "</tr>"
+    )
+
+failures_html = ""
+if problem_rows:
+    items = []
+    for status, scenario, message in problem_rows:
+        items.append(
+            "<li>"
+            f"<strong>{html.escape(status)}:</strong> {html.escape(scenario)}"
+            f"<pre>{html.escape(message)}</pre>"
+            "</li>"
+        )
+    failures_html = "<section><h2>Failures</h2><ul class='failures'>" + "\n".join(items) + "</ul></section>"
+
+diagnostics_html = ""
+if diagnostics:
+    links = "\n".join(
+        f"<li><a href='{rel(path)}'>{html.escape(os.path.basename(path))}</a></li>"
+        for path in diagnostics
+    )
+    diagnostics_html = f"<section><h2>UI Diagnostics</h2><ul>{links}</ul></section>"
+
+report = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>QA Results</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 24px; color: #17202a; background: #f7f9fb; }}
+    h1 {{ margin: 0 0 4px; }}
+    h2 {{ margin-top: 28px; }}
+    .meta {{ color: #566573; margin-bottom: 18px; }}
+    .summary {{ display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 12px; margin: 18px 0; }}
+    .card {{ background: white; border: 1px solid #d8dee4; border-radius: 6px; padding: 14px; }}
+    .label {{ color: #566573; font-size: 12px; text-transform: uppercase; }}
+    .value {{ font-size: 24px; font-weight: 700; margin-top: 4px; }}
+    table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8dee4; }}
+    th, td {{ text-align: left; border-bottom: 1px solid #e5e8eb; padding: 10px; vertical-align: top; }}
+    th {{ background: #eef2f6; }}
+    .badge {{ display: inline-block; min-width: 52px; text-align: center; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; }}
+    .pass {{ background: #d5f5e3; color: #145a32; }}
+    .fail, .error {{ background: #fadbd8; color: #922b21; }}
+    .skip {{ background: #eaeded; color: #566573; }}
+    pre {{ white-space: pre-wrap; background: #f4f6f7; border: 1px solid #d8dee4; border-radius: 6px; padding: 10px; }}
+    a {{ color: #1f618d; }}
+    ul {{ background: white; border: 1px solid #d8dee4; border-radius: 6px; padding: 12px 12px 12px 32px; }}
+  </style>
+</head>
+<body>
+  <h1>QA Results</h1>
+  <div class="meta">Generated {html.escape(completed)} for customer {html.escape(os.environ.get("CUSTOMER", "unknown"))}</div>
+  <section class="summary">
+    <div class="card"><div class="label">Total</div><div class="value">{total}</div></div>
+    <div class="card"><div class="label">Passed</div><div class="value">{passed}</div></div>
+    <div class="card"><div class="label">Failed</div><div class="value">{failed}</div></div>
+    <div class="card"><div class="label">Errors</div><div class="value">{errored}</div></div>
+    <div class="card"><div class="label">Skipped</div><div class="value">{skipped}</div></div>
+  </section>
+  <section>
+    <h2>Run Details</h2>
+    <table>
+      <tr><th>Customer</th><td>{html.escape(os.environ.get("CUSTOMER", "unknown"))}</td></tr>
+      <tr><th>Target URL</th><td>{html.escape(os.environ.get("TARGET_URL", ""))}</td></tr>
+      <tr><th>Browser</th><td>{html.escape(os.environ.get("BROWSER", ""))}</td></tr>
+      <tr><th>Tags</th><td>{html.escape(os.environ.get("TEST_TAGS", ""))}</td></tr>
+      <tr><th>Raw Log</th><td><a href="{rel(raw_log)}">{rel(raw_log)}</a></td></tr>
+    </table>
+  </section>
+  <section>
+    <h2>Scenarios</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Time(s)</th><th>Scenario</th><th>Failure</th></tr></thead>
+      <tbody>
+        {"".join(rows_html)}
+      </tbody>
+    </table>
+  </section>
+  {failures_html}
+  {diagnostics_html}
+</body>
+</html>
+"""
+
+with open(html_report, "w", encoding="utf-8") as handle:
+    handle.write(report)
+
+print("")
+print(f"HTML report: {html_report}")
 PY
 else
   echo "No JUnit XML found in ${test_results_dir}."
@@ -177,6 +309,7 @@ printf "%-12s %s\n" "Exit code:" "${exit_code}"
 printf "%-12s %s\n" "Completed:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf "%-12s %s\n" "Raw log:" "${raw_log}"
 printf "%-12s %s\n" "JUnit:" "${test_results_dir}"
+printf "%-12s %s\n" "HTML:" "${html_report}"
 if [[ "${exit_code}" -eq 0 ]]; then
   echo "Status: PASS"
 else

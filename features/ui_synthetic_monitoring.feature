@@ -110,18 +110,18 @@ Feature: SyntheticMonitoring
     And I enter the Application url "<endpoint>/modem-details/<mac_address>"
     Then I will wait till all the loader icons disappears from the screen
     And I click on "label" having "text()=Subscriber Info"
-    And I make sure that "button" is "visible" to me on the "home page" having xpath="//mat-panel-title[normalize-space(text())='RxMER Chart']"
-    And I click on "panel" having "text=spectra chart"
+    And I make sure that "button" is "visible" to me on the "home page" having xpath="//mat-panel-title[normalize-space(text())='Spectra Chart']"
+    And I click on "panel" having xpath="//mat-expansion-panel-header[.//mat-panel-title[normalize-space(text())='Spectra Chart']]"
     And I will wait till all the loader icons disappears from the screen
     And I press "PAGE_DOWN" key
     And I wait for 1 seconds
-    And I capture the "text" for the webelement having xpath="(//td[contains(@class, 'mat-column-display_poll_time')])[1]" and store it in "session.polltime_before"
+    And I capture the "text" for the webelement having xpath="(//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" and store it in "session.polltime_before"
     And I click on "button" having "text()=Rescan Spectra"
     And I will wait till all the loader icons disappears from the screen
     And I will wait till the "dialog box" having "text=Rescanning spectra" disappears from the screen within 120 seconds
     Then I will wait till all the loader icons disappears from the screen
     And I wait for 12 seconds
-    And I capture the "text" for the webelement having xpath="(//td[contains(@class, 'mat-column-display_poll_time')])[1]" and store it in "session.polltime_after"
+    And I capture the "text" for the webelement having xpath="(//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" and store it in "session.polltime_after"
     And I make sure that "{{session.polltime_before}}" "not equals" "{{session.polltime_after}}"
 
     Examples:

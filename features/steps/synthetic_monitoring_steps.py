@@ -265,6 +265,61 @@ def _wait_for_page_settle(context):
     _wait(context, DEFAULT_TIMEOUT).until(EC.invisibility_of_element_located((By.XPATH, loader_xpath)))
 
 
+def _target_url_base(context):
+    endpoint = context.config.userdata.get("endpoint") or os.environ.get("TARGET_URL") or os.environ.get("ENVIRONMENT_URL")
+    if endpoint:
+        return endpoint.rstrip("/")
+    current_url = getattr(context.browser, "current_url", "")
+    parsed = urlparse(current_url)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return ""
+
+
+def _field_is_present(context, locator_text, timeout=5):
+    by, value = _parse_locator(locator_text)
+    try:
+        _wait(context, timeout).until(EC.presence_of_element_located((by, value)))
+        return True
+    except TimeoutException:
+        return False
+
+
+def _open_install_cm(context):
+    mac_locator = "data-placeholder=Mac Address"
+    if _field_is_present(context, mac_locator):
+        return
+
+    click_attempts = [
+        (None, "text=Install CM"),
+        ("//*[contains(normalize-space(.), 'Install CM')]/ancestor::*[self::button or self::a or @role='button'][1]", None),
+        ("//*[contains(normalize-space(.), 'phone_android')]/ancestor::*[self::button or self::a or @role='button'][1]", None),
+        ("//*[contains(@class, 'phone_android') or normalize-space(.)='phone_android']/ancestor::*[self::button or self::a or @role='button'][1]", None),
+    ]
+    for xpath, locator_text in click_attempts:
+        try:
+            if xpath:
+                _click(context, xpath=xpath, timeout=5)
+            else:
+                _click(context, locator_text=locator_text, timeout=5)
+            _wait_for_page_settle(context)
+            if _field_is_present(context, mac_locator):
+                return
+        except Exception:
+            pass
+
+    base_url = _target_url_base(context)
+    for path in ("install-cm", "install-cm/", "install-modem", "install-modem/", "install-cable-modem"):
+        if not base_url:
+            break
+        context.browser.get(f"{base_url}/{path}")
+        _wait_for_page_settle(context)
+        if _field_is_present(context, mac_locator):
+            return
+
+    _find(context, locator_text=mac_locator)
+
+
 def _decrypt_password(encrypted_password):
     override = os.environ.get("APP_PASSWORD")
     if override:
@@ -547,6 +602,11 @@ def step_select_hamburger(context, menu_item):
         "contains(@aria-label,'menu') or contains(@aria-label,'Menu')]"
     )
     _click(context, xpath=menu_xpath)
+    if menu_item.strip().lower() == "install cm":
+        _open_install_cm(context)
+        _print_ui_result(context, "Menu", "SELECTED", menu_item)
+        return
+
     _click(context, locator_text=f"text={menu_item}")
     _wait_for_page_settle(context)
     _print_ui_result(context, "Menu", "SELECTED", menu_item)
