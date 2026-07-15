@@ -131,16 +131,24 @@ def first_error_line(text):
 def clean_message(message):
     if not message:
         return ""
-    text = " ".join(str(message).split())
+    text = str(message).replace("\r\n", "\n").replace("\r", "\n")
     if "Find element timed out" in text:
-        return text.split("Visible fields:", 1)[0].strip()
+        text = text.split("Visible fields:", 1)[0].strip()
     if "Click element timed out" in text:
-        return text.split("Visible fields:", 1)[0].strip()
+        text = text.split("Visible fields:", 1)[0].strip()
     if "Stacktrace:" in text:
         text = text.split("Stacktrace:", 1)[0].strip()
-    if text in {"Message:", "Message"}:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    cleaned = []
+    for line in lines:
+        if line.startswith("Locator:") and len(line) > 180:
+            cleaned.append(line[:177] + "...")
+        else:
+            cleaned.append(line)
+    text = "\n".join(cleaned)
+    if text in {"Message:", "Message", ""}:
         return "Selenium command failed. See raw log and UI diagnostics."
-    return text[:500]
+    return text[:900]
 
 for name in sorted(os.listdir(results_dir)):
     if not name.endswith(".xml"):
@@ -216,6 +224,8 @@ def status_class(status):
 passed = total - failed - errored - skipped
 completed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 diagnostics = diagnostic_links()
+run_status = "PASS" if failed == 0 and errored == 0 else "FAIL"
+run_status_class = "pass" if run_status == "PASS" else "fail"
 
 rows_html = []
 for status, classname, scenario, duration, message in rows:
@@ -237,20 +247,21 @@ if problem_rows:
     items = []
     for status, scenario, message in problem_rows:
         items.append(
-            "<li>"
-            f"<strong>{html.escape(status)}:</strong> {html.escape(scenario)}"
+            f"<article class='failure-card {status_class(status)}-border'>"
+            f"<div class='failure-heading'><span class='badge {status_class(status)}'>{html.escape(status)}</span>"
+            f"<strong>{html.escape(scenario)}</strong></div>"
             f"<pre>{html.escape(message)}</pre>"
-            "</li>"
+            "</article>"
         )
-    failures_html = "<section id='failures'><h2>Failures</h2><ul class='failures'>" + "\n".join(items) + "</ul></section>"
+    failures_html = "<section id='failures' class='panel'><h2>Failures</h2>" + "\n".join(items) + "</section>"
 
 diagnostics_html = ""
 if diagnostics:
     links = "\n".join(
-        f"<li><a href='{rel(path)}'>{html.escape(os.path.basename(path))}</a></li>"
+        f"<a class='diag-link' href='{rel(path)}'>{html.escape(os.path.basename(path))}</a>"
         for path in diagnostics
     )
-    diagnostics_html = f"<section><h2>UI Diagnostics</h2><ul>{links}</ul></section>"
+    diagnostics_html = f"<section class='panel'><h2>UI Diagnostics</h2><div class='diag-grid'>{links}</div></section>"
 
 stylesheet = """body {
   margin: 0;
@@ -261,14 +272,18 @@ stylesheet = """body {
 .page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 28px;
+  padding: 24px;
 }
 .header {
   background: #ffffff;
   border: 1px solid #d8dee4;
   border-radius: 8px;
-  padding: 20px 22px;
+  padding: 22px 24px;
   margin-bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
 }
 h1 {
   margin: 0 0 6px;
@@ -281,6 +296,13 @@ h2 {
 .meta {
   color: #5d6d7e;
 }
+.run-status {
+  text-align: right;
+}
+.run-status .badge {
+  min-width: 72px;
+  font-size: 13px;
+}
 .summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(130px, 1fr));
@@ -292,6 +314,18 @@ h2 {
   border: 1px solid #d8dee4;
   border-radius: 8px;
   padding: 16px;
+}
+.card.pass-card {
+  border-left: 5px solid #2ecc71;
+}
+.card.fail-card {
+  border-left: 5px solid #e74c3c;
+}
+.card.error-card {
+  border-left: 5px solid #c0392b;
+}
+.card.skip-card {
+  border-left: 5px solid #95a5a6;
 }
 .label {
   color: #5d6d7e;
@@ -326,6 +360,12 @@ th {
 tr:last-child td {
   border-bottom: 0;
 }
+td:nth-child(3) {
+  line-height: 1.35;
+}
+.panel {
+  margin-top: 24px;
+}
 .badge {
   display: inline-block;
   min-width: 58px;
@@ -354,6 +394,8 @@ pre {
   border-radius: 6px;
   padding: 10px;
   overflow-x: auto;
+  line-height: 1.45;
+  margin: 10px 0 0;
 }
 a {
   color: #1f618d;
@@ -362,18 +404,49 @@ a {
 a:hover {
   text-decoration: underline;
 }
-ul {
+.failure-card, .diag-grid {
   background: #ffffff;
   border: 1px solid #d8dee4;
   border-radius: 8px;
-  padding: 14px 14px 14px 34px;
+  padding: 14px;
 }
-.failures li {
-  margin-bottom: 14px;
+.failure-card {
+  margin-bottom: 12px;
+}
+.failure-card.fail-border {
+  border-left: 5px solid #e74c3c;
+}
+.failure-card.error-border {
+  border-left: 5px solid #c0392b;
+}
+.failure-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 8px;
+}
+.diag-link {
+  display: block;
+  background: #f8fafc;
+  border: 1px solid #e5e8eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 800px) {
   .page {
     padding: 14px;
+  }
+  .header {
+    display: block;
+  }
+  .run-status {
+    text-align: left;
+    margin-top: 12px;
   }
   .summary {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -395,17 +468,23 @@ report = f"""<!doctype html>
 <body>
   <main class="page">
     <section class="header">
-      <h1>QA Results</h1>
-      <div class="meta">Generated {html.escape(completed)} for customer {html.escape(os.environ.get("CUSTOMER", "unknown"))}</div>
+      <div>
+        <h1>QA Results</h1>
+        <div class="meta">Generated {html.escape(completed)} for customer {html.escape(os.environ.get("CUSTOMER", "unknown"))}</div>
+      </div>
+      <div class="run-status">
+        <div class="label">Run Status</div>
+        <span class="badge {run_status_class}">{run_status}</span>
+      </div>
     </section>
     <section class="summary">
       <div class="card"><div class="label">Total</div><div class="value">{total}</div></div>
-      <div class="card"><div class="label">Passed</div><div class="value">{passed}</div></div>
-      <div class="card"><div class="label">Failed</div><div class="value">{failed}</div></div>
-      <div class="card"><div class="label">Errors</div><div class="value">{errored}</div></div>
-      <div class="card"><div class="label">Skipped</div><div class="value">{skipped}</div></div>
+      <div class="card pass-card"><div class="label">Passed</div><div class="value">{passed}</div></div>
+      <div class="card fail-card"><div class="label">Failed</div><div class="value">{failed}</div></div>
+      <div class="card error-card"><div class="label">Errors</div><div class="value">{errored}</div></div>
+      <div class="card skip-card"><div class="label">Skipped</div><div class="value">{skipped}</div></div>
     </section>
-    <section>
+    <section class="panel">
       <h2>Run Details</h2>
       <table>
         <tr><th>Customer</th><td>{html.escape(os.environ.get("CUSTOMER", "unknown"))}</td></tr>
@@ -415,7 +494,7 @@ report = f"""<!doctype html>
         <tr><th>Raw Log</th><td><a href="{rel(raw_log)}">{rel(raw_log)}</a></td></tr>
       </table>
     </section>
-    <section>
+    <section class="panel">
       <h2>Scenarios</h2>
       <table>
         <thead><tr><th>Status</th><th>Time(s)</th><th>Scenario</th><th>Failure</th></tr></thead>
