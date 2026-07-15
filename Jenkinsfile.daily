@@ -65,7 +65,7 @@ pipeline {
     )
     text(
       name: 'QA_TEST_COMMAND',
-      defaultValue: '''behave features/ui_synthetic_monitoring.feature --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
+      defaultValue: '''behave features/ui_synthetic_monitoring.feature --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --format plain --no-source --no-capture --no-skipped --junit --junit-directory artifacts/test-results''',
       description: 'Command passed to each customer job and executed inside that customer agent container.'
     )
     string(

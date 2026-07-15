@@ -20,6 +20,8 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 ACCEPTABLE_STATUS_CODES = {200, 201, 202, 204, 301, 302, 303, 307, 308, 401, 403}
 DEFAULT_TIMEOUT = int(os.environ.get("QA_UI_TIMEOUT", "60"))
+LOWERCASE_XPATH = "abcdefghijklmnopqrstuvwxyz"
+UPPERCASE_XPATH = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def _resolve(context, value):
@@ -43,6 +45,31 @@ def _resolve(context, value):
 
 def _wait(context, timeout=None):
     return WebDriverWait(context.browser, timeout or DEFAULT_TIMEOUT)
+
+
+def _xpath_literal(value):
+    if "'" not in value:
+        return f"'{value}'"
+    if '"' not in value:
+        return f'"{value}"'
+    parts = value.split("'")
+    return "concat(" + ', "\'", '.join(f"'{part}'" for part in parts) + ")"
+
+
+def _normalized_text_contains(value):
+    return (
+        "contains(translate(normalize-space(.), "
+        f"'{UPPERCASE_XPATH}', '{LOWERCASE_XPATH}'), "
+        f"{_xpath_literal(value.lower())})"
+    )
+
+
+def _normalized_text_equals(value):
+    return (
+        "translate(normalize-space(.), "
+        f"'{UPPERCASE_XPATH}', '{LOWERCASE_XPATH}') = "
+        f"{_xpath_literal(value.lower())}"
+    )
 
 
 def _start_browser(browser_name):
@@ -74,26 +101,44 @@ def _parse_locator(locator_text=None, xpath=None):
     text = locator_text or ""
     if "data-placeholder=" in text:
         value = text.split("data-placeholder=", 1)[1].split(" and ", 1)[0].strip()
-        return By.CSS_SELECTOR, f"[data-placeholder='{value}']"
+        value_literal = _xpath_literal(value)
+        value_lower_literal = _xpath_literal(value.lower())
+        return By.XPATH, (
+            "//*[self::input or self::textarea]"
+            "["
+            f"@data-placeholder={value_literal} or @placeholder={value_literal} or @aria-label={value_literal} or "
+            f"translate(@data-placeholder, '{UPPERCASE_XPATH}', '{LOWERCASE_XPATH}')={value_lower_literal} or "
+            f"translate(@placeholder, '{UPPERCASE_XPATH}', '{LOWERCASE_XPATH}')={value_lower_literal} or "
+            f"translate(@aria-label, '{UPPERCASE_XPATH}', '{LOWERCASE_XPATH}')={value_lower_literal}"
+            "]"
+            "|//mat-form-field[.//*[normalize-space()="
+            f"{value_literal} or translate(normalize-space(), '{UPPERCASE_XPATH}', '{LOWERCASE_XPATH}')={value_lower_literal}"
+            "]]//*[self::input or self::textarea]"
+        )
     if "type=submit" in text:
         return By.CSS_SELECTOR, "[type='submit']"
     if "class=title" in text:
         return By.CSS_SELECTOR, ".title"
     if "text():=" in text:
         value = text.split("text():=", 1)[1].strip()
-        return By.XPATH, f"//*[normalize-space()='{value}']"
+        return By.XPATH, f"//*[{_normalized_text_equals(value)}]"
     if "text()=" in text:
         value = text.split("text()=", 1)[1].strip()
-        return By.XPATH, f"//*[normalize-space()='{value}']"
+        return By.XPATH, f"//*[{_normalized_text_equals(value)}]"
     if "text:=" in text:
         value = text.split("text:=", 1)[1].strip()
-        return By.XPATH, f"//*[normalize-space()='{value}']"
+        return By.XPATH, f"//*[{_normalized_text_equals(value)}]"
     if "text~" in text:
         value = text.split("text~", 1)[1].strip()
-        return By.XPATH, f"//*[contains(normalize-space(), '{value}')]"
+        return By.XPATH, f"//*[{_normalized_text_contains(value)}]"
     if "text=" in text:
         value = text.split("text=", 1)[1].split(" and ", 1)[0].strip()
-        return By.XPATH, f"//*[contains(normalize-space(), '{value}')]"
+        text_match = _normalized_text_contains(value)
+        return By.XPATH, (
+            f"//*[self::button or self::a or self::mat-expansion-panel-header or @role='button'][{text_match}]"
+            f"|//*[{text_match}]/ancestor::*[self::button or self::a or self::mat-expansion-panel-header or @role='button'][1]"
+            f"|//*[{text_match}]"
+        )
 
     raise AssertionError(f"Unsupported locator expression: {locator_text}")
 
@@ -116,6 +161,15 @@ def _click(context, locator_text=None, xpath=None, timeout=None):
         context.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
         element.click()
     return element
+
+
+def _wait_for_page_settle(context):
+    _wait(context, 10).until(lambda driver: driver.execute_script("return document.readyState") == "complete")
+    loader_xpath = (
+        "//*[contains(@class,'loader') or contains(@class,'spinner') or "
+        "contains(@class,'progress') or contains(@class,'mat-progress')]"
+    )
+    _wait(context, DEFAULT_TIMEOUT).until(EC.invisibility_of_element_located((By.XPATH, loader_xpath)))
 
 
 def _decrypt_password(encrypted_password):
@@ -331,12 +385,8 @@ def step_click_named_text(context, name):
 @then("I will wait till all the loader icons disappears from the screen")
 @when("I will wait till all the loader icons disappears from the screen")
 def step_wait_loaders(context):
-    loader_xpath = (
-        "//*[contains(@class,'loader') or contains(@class,'spinner') or "
-        "contains(@class,'progress') or contains(@class,'mat-progress')]"
-    )
     try:
-        _wait(context, DEFAULT_TIMEOUT).until(EC.invisibility_of_element_located((By.XPATH, loader_xpath)))
+        _wait_for_page_settle(context)
     except TimeoutException:
         raise AssertionError("Loader icons did not disappear before timeout.")
     _print_ui_result(context, "Loaders", "CLEARED")
@@ -405,6 +455,7 @@ def step_select_hamburger(context, menu_item):
     )
     _click(context, xpath=menu_xpath)
     _click(context, locator_text=f"text={menu_item}")
+    _wait_for_page_settle(context)
     _print_ui_result(context, "Menu", "SELECTED", menu_item)
 
 

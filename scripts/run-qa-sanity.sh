@@ -4,6 +4,10 @@ set -euo pipefail
 qa_command="${QA_TEST_COMMAND:-}"
 base_requirements="${QA_BASE_REQUIREMENTS:-agent/requirements-qa-base.txt}"
 pip_quiet_flag="${QA_PIP_QUIET_FLAG:---quiet}"
+artifacts_dir="${QA_ARTIFACTS_DIR:-artifacts}"
+log_dir="${artifacts_dir}/logs"
+test_results_dir="${artifacts_dir}/test-results"
+raw_log="${log_dir}/qa-raw.log"
 
 section() {
   echo
@@ -27,6 +31,8 @@ export TEST_TAGS="${TEST_TAGS:-}"
 export CUSTOMER="${CUSTOMER:-unknown}"
 export QA_SECRET_DIR="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
 
+mkdir -p "${log_dir}" "${test_results_dir}"
+
 section "QA Sanity Run"
 printf "%-12s %s\n" "Customer:" "${CUSTOMER}"
 printf "%-12s %s\n" "Target URL:" "${TARGET_URL}"
@@ -44,6 +50,8 @@ else
   printf "%-12s %s\n" "App pass:" "not configured"
 fi
 printf "%-12s %s\n" "Started:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf "%-12s %s\n" "Raw log:" "${raw_log}"
+printf "%-12s %s\n" "JUnit:" "${test_results_dir}"
 
 section "Environment Setup"
 python3 -m venv --system-site-packages .venv
@@ -74,13 +82,65 @@ echo "${qa_command}"
 
 set +e
 section "QA Results"
-bash -c "${qa_command}"
-exit_code="$?"
+bash -o pipefail -c "${qa_command}" 2>&1 | tee "${raw_log}"
+exit_code="${PIPESTATUS[0]}"
 set -e
+
+section "QA Result Table"
+if compgen -G "${test_results_dir}/*.xml" >/dev/null; then
+  python - "${test_results_dir}" <<'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+results_dir = sys.argv[1]
+rows = []
+total = failed = errored = skipped = 0
+
+for name in sorted(os.listdir(results_dir)):
+    if not name.endswith(".xml"):
+        continue
+    path = os.path.join(results_dir, name)
+    root = ET.parse(path).getroot()
+    suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+    for suite in suites:
+        total += int(suite.attrib.get("tests", 0))
+        failed += int(suite.attrib.get("failures", 0))
+        errored += int(suite.attrib.get("errors", 0))
+        skipped += int(suite.attrib.get("skipped", 0))
+    for case in root.findall(".//testcase"):
+        status = "PASS"
+        if case.find("error") is not None:
+            status = "ERROR"
+        elif case.find("failure") is not None:
+            status = "FAIL"
+        elif case.find("skipped") is not None:
+            status = "SKIP"
+        classname = case.attrib.get("classname", "")
+        scenario = case.attrib.get("name", "")
+        duration = case.attrib.get("time", "0")
+        rows.append((status, classname, scenario, duration))
+
+print(f"{'Status':<8} {'Time(s)':<8} Scenario")
+print(f"{'-' * 8} {'-' * 8} {'-' * 60}")
+for status, classname, scenario, duration in rows:
+    label = f"{classname} - {scenario}" if classname else scenario
+    print(f"{status:<8} {duration:<8} {label}")
+
+print("")
+print(f"Total: {total}  Passed: {total - failed - errored - skipped}  Failed: {failed}  Errors: {errored}  Skipped: {skipped}")
+PY
+else
+  echo "No JUnit XML found in ${test_results_dir}."
+  echo "Add these Behave options to QA_TEST_COMMAND for a clean result table:"
+  echo "--junit --junit-directory ${test_results_dir}"
+fi
 
 section "QA Summary"
 printf "%-12s %s\n" "Exit code:" "${exit_code}"
 printf "%-12s %s\n" "Completed:" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf "%-12s %s\n" "Raw log:" "${raw_log}"
+printf "%-12s %s\n" "JUnit:" "${test_results_dir}"
 if [[ "${exit_code}" -eq 0 ]]; then
   echo "Status: PASS"
 else

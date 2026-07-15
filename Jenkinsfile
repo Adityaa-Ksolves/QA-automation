@@ -19,10 +19,11 @@ def customerTags = [
 ]
 
 pipeline {
-  agent none
+  agent { label "${customerLabels[params.CUSTOMER]}" }
 
   options {
     timestamps()
+    skipDefaultCheckout(true)
     disableConcurrentBuilds()
     buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '15'))
   }
@@ -55,7 +56,7 @@ pipeline {
     )
     text(
       name: 'QA_TEST_COMMAND',
-      defaultValue: '''behave features/ui_synthetic_monitoring.feature --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --no-capture --no-skipped''',
+      defaultValue: '''behave features/ui_synthetic_monitoring.feature --tags "${TEST_TAGS}" -D browser="${BROWSER}" -D endpoint="${TARGET_URL}" --format plain --no-source --no-capture --no-skipped --junit --junit-directory artifacts/test-results''',
       description: 'Command that runs the existing Python/Behave sanity script inside the Jenkins agent container.'
     )
     string(
@@ -72,8 +73,8 @@ pipeline {
 
   stages {
     stage('Validate Routing') {
-      agent { label "${customerLabels[params.CUSTOMER]}" }
       steps {
+        checkout scm
         script {
           if (!customerLabels.containsKey(params.CUSTOMER)) {
             error "Unknown CUSTOMER '${params.CUSTOMER}'. Add it to customerLabels in Jenkinsfile."
@@ -104,7 +105,6 @@ pipeline {
     }
 
     stage('Connectivity Check') {
-      agent { label "${customerLabels[params.CUSTOMER]}" }
       steps {
         sh '''
           set -eu
@@ -119,7 +119,6 @@ pipeline {
     }
 
     stage('Run QA Sanity') {
-      agent { label "${customerLabels[params.CUSTOMER]}" }
       environment {
         CUSTOMER = "${params.CUSTOMER}"
         TARGET_URL = "${params.ENVIRONMENT_URL}"
@@ -162,6 +161,8 @@ pipeline {
       }
       post {
         always {
+          junit testResults: 'artifacts/test-results/*.xml', allowEmptyResults: true
+          archiveArtifacts artifacts: 'artifacts/**/*', allowEmptyArchive: true
           echo 'QA sanity output was printed to the console.'
         }
       }
