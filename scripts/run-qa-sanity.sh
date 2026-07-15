@@ -221,6 +221,14 @@ def status_class(status):
         "SKIP": "skip",
     }.get(status, "unknown")
 
+def scenario_title(scenario):
+    return scenario.split(" -- @", 1)[0].strip()
+
+def scenario_case(scenario):
+    if " -- @" in scenario:
+        return "@" + scenario.split(" -- @", 1)[1].strip()
+    return ""
+
 passed = total - failed - errored - skipped
 completed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 diagnostics = diagnostic_links()
@@ -229,15 +237,20 @@ run_status_class = "pass" if run_status == "PASS" else "fail"
 
 rows_html = []
 for status, classname, scenario, duration, message in rows:
-    label = f"{classname} - {scenario}" if classname else scenario
+    title = scenario_title(scenario)
+    case_id = scenario_case(scenario)
     failure_cell = ""
     if message:
-        failure_cell = "<a href='#failures'>View failure</a>"
+        failure_cell = "<a class='action-link' href='#failures'>View failure</a>"
     rows_html.append(
         "<tr>"
         f"<td><span class='badge {status_class(status)}'>{html.escape(status)}</span></td>"
         f"<td>{duration:.2f}</td>"
-        f"<td>{html.escape(label)}</td>"
+        "<td>"
+        f"<div class='scenario-title'>{html.escape(title)}</div>"
+        f"<div class='scenario-meta'>{html.escape(classname)}"
+        f"{' | ' + html.escape(case_id) if case_id else ''}</div>"
+        "</td>"
         f"<td>{failure_cell}</td>"
         "</tr>"
     )
@@ -246,10 +259,13 @@ failures_html = ""
 if problem_rows:
     items = []
     for status, scenario, message in problem_rows:
+        title = scenario_title(scenario)
+        case_id = scenario_case(scenario)
         items.append(
             f"<article class='failure-card {status_class(status)}-border'>"
             f"<div class='failure-heading'><span class='badge {status_class(status)}'>{html.escape(status)}</span>"
-            f"<strong>{html.escape(scenario)}</strong></div>"
+            f"<div><strong>{html.escape(title)}</strong>"
+            f"<div class='scenario-meta'>{html.escape(case_id)}</div></div></div>"
             f"<pre>{html.escape(message)}</pre>"
             "</article>"
         )
@@ -284,6 +300,30 @@ stylesheet = """body {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+}
+.details-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.details-key, .details-value {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e8eb;
+}
+.details-key {
+  background: #eef2f6;
+  color: #1f3a5f;
+  font-weight: 700;
+  font-size: 13px;
+}
+.details-value {
+  background: #ffffff;
+}
+.details-key:nth-last-child(2), .details-value:last-child {
+  border-bottom: 0;
 }
 h1 {
   margin: 0 0 6px;
@@ -360,8 +400,26 @@ th {
 tr:last-child td {
   border-bottom: 0;
 }
+td:first-child {
+  width: 86px;
+}
+td:nth-child(2) {
+  width: 78px;
+  white-space: nowrap;
+}
+td:last-child {
+  width: 110px;
+}
 td:nth-child(3) {
   line-height: 1.35;
+}
+.scenario-title {
+  font-weight: 600;
+}
+.scenario-meta {
+  color: #6b7c8f;
+  font-size: 12px;
+  margin-top: 4px;
 }
 .panel {
   margin-top: 24px;
@@ -403,6 +461,15 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+.action-link {
+  display: inline-block;
+  border: 1px solid #b6d4ea;
+  background: #eef7ff;
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 13px;
+  font-weight: 700;
 }
 .failure-card, .diag-grid {
   background: #ffffff;
@@ -486,13 +553,13 @@ report = f"""<!doctype html>
     </section>
     <section class="panel">
       <h2>Run Details</h2>
-      <table>
-        <tr><th>Customer</th><td>{html.escape(os.environ.get("CUSTOMER", "unknown"))}</td></tr>
-        <tr><th>Target URL</th><td>{html.escape(os.environ.get("TARGET_URL", ""))}</td></tr>
-        <tr><th>Browser</th><td>{html.escape(os.environ.get("BROWSER", ""))}</td></tr>
-        <tr><th>Tags</th><td>{html.escape(os.environ.get("TEST_TAGS", ""))}</td></tr>
-        <tr><th>Raw Log</th><td><a href="{rel(raw_log)}">{rel(raw_log)}</a></td></tr>
-      </table>
+      <div class="details-grid">
+        <div class="details-key">Customer</div><div class="details-value">{html.escape(os.environ.get("CUSTOMER", "unknown"))}</div>
+        <div class="details-key">Target URL</div><div class="details-value">{html.escape(os.environ.get("TARGET_URL", ""))}</div>
+        <div class="details-key">Browser</div><div class="details-value">{html.escape(os.environ.get("BROWSER", ""))}</div>
+        <div class="details-key">Tags</div><div class="details-value">{html.escape(os.environ.get("TEST_TAGS", ""))}</div>
+        <div class="details-key">Raw Log</div><div class="details-value"><a href="{rel(raw_log)}">{rel(raw_log)}</a></div>
+      </div>
     </section>
     <section class="panel">
       <h2>Scenarios</h2>
