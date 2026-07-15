@@ -32,6 +32,7 @@ def _row_value(scenario, name):
 
 
 def before_scenario(context, scenario):
+    context.current_scenario_name = scenario.name
     selected_customer = _normalize(os.environ.get("CUSTOMER"))
     selected_endpoint = (os.environ.get("TARGET_URL") or os.environ.get("ENVIRONMENT_URL") or "").rstrip("/")
 

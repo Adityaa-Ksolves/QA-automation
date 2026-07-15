@@ -47,6 +47,93 @@ def _wait(context, timeout=None):
     return WebDriverWait(context.browser, timeout or DEFAULT_TIMEOUT)
 
 
+def _safe_name(value):
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value or "unknown").strip("_")[:120]
+
+
+def _artifact_dir():
+    path = os.path.join(os.environ.get("QA_ARTIFACTS_DIR", "artifacts"), "ui-diagnostics")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _collect_visible_labels(context, selector, script):
+    try:
+        values = context.browser.execute_script(script, selector)
+    except Exception:
+        return []
+    return [str(value).strip() for value in values if str(value).strip()][:15]
+
+
+def _page_diagnostics(context, action, by, value):
+    scenario = _safe_name(getattr(context, "current_scenario_name", "scenario"))
+    timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    base_path = os.path.join(_artifact_dir(), f"{timestamp}-{scenario}")
+    screenshot_path = f"{base_path}.png"
+    html_path = f"{base_path}.html"
+
+    try:
+        context.browser.save_screenshot(screenshot_path)
+    except Exception:
+        screenshot_path = "screenshot unavailable"
+
+    try:
+        with open(html_path, "w", encoding="utf-8") as handle:
+            handle.write(context.browser.page_source)
+    except Exception:
+        html_path = "html unavailable"
+
+    fields = _collect_visible_labels(
+        context,
+        "input, textarea, [contenteditable='true']",
+        """
+        return Array.from(document.querySelectorAll(arguments[0]))
+          .filter(e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length))
+          .map(e => [
+            e.tagName.toLowerCase(),
+            e.getAttribute('data-placeholder') || e.getAttribute('placeholder') || e.getAttribute('aria-label') || e.name || e.id || '',
+            e.value ? '<has value>' : ''
+          ].filter(Boolean).join(': '));
+        """,
+    )
+    buttons = _collect_visible_labels(
+        context,
+        "button, a, [role='button'], mat-expansion-panel-header",
+        """
+        return Array.from(document.querySelectorAll(arguments[0]))
+          .filter(e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length))
+          .map(e => (e.innerText || e.getAttribute('aria-label') || e.getAttribute('title') || '').trim())
+          .filter(Boolean);
+        """,
+    )
+    panels = _collect_visible_labels(
+        context,
+        "mat-panel-title, mat-expansion-panel-header, .mat-expansion-panel-header-title",
+        """
+        return Array.from(document.querySelectorAll(arguments[0]))
+          .filter(e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length))
+          .map(e => (e.innerText || '').trim())
+          .filter(Boolean);
+        """,
+    )
+
+    details = [
+        f"{action} timed out after {DEFAULT_TIMEOUT}s.",
+        f"Locator: {by} = {value}",
+        f"URL: {getattr(context.browser, 'current_url', 'unknown')}",
+        f"Title: {getattr(context.browser, 'title', 'unknown')}",
+        f"Screenshot: {screenshot_path}",
+        f"HTML: {html_path}",
+    ]
+    if fields:
+        details.append("Visible fields: " + " | ".join(fields))
+    if buttons:
+        details.append("Visible buttons/links: " + " | ".join(buttons))
+    if panels:
+        details.append("Visible panels: " + " | ".join(panels))
+    return "\n".join(details)
+
+
 def _xpath_literal(value):
     if "'" not in value:
         return f"'{value}'"
@@ -145,12 +232,18 @@ def _parse_locator(locator_text=None, xpath=None):
 
 def _find(context, locator_text=None, xpath=None, timeout=None):
     by, value = _parse_locator(locator_text, xpath)
-    return _wait(context, timeout).until(EC.presence_of_element_located((by, value)))
+    try:
+        return _wait(context, timeout).until(EC.presence_of_element_located((by, value)))
+    except TimeoutException as exc:
+        raise AssertionError(_page_diagnostics(context, "Find element", by, value)) from exc
 
 
 def _click(context, locator_text=None, xpath=None, timeout=None):
     by, value = _parse_locator(locator_text, xpath)
-    element = _wait(context, timeout).until(EC.element_to_be_clickable((by, value)))
+    try:
+        element = _wait(context, timeout).until(EC.element_to_be_clickable((by, value)))
+    except TimeoutException as exc:
+        raise AssertionError(_page_diagnostics(context, "Click element", by, value)) from exc
     context.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
     try:
         element.click()

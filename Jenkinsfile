@@ -92,6 +92,7 @@ pipeline {
           env.CUSTOMER_TAG = customerTags[params.CUSTOMER]
         }
         sh '''
+          set +x
           set -eu
           echo "Customer: ${CUSTOMER}"
           echo "Jenkins node: ${NODE_NAME}"
@@ -107,6 +108,7 @@ pipeline {
     stage('Connectivity Check') {
       steps {
         sh '''
+          set +x
           set -eu
           ./scripts/connectivity-check.sh "${ENVIRONMENT_URL}"
         '''

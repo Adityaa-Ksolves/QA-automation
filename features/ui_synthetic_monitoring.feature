@@ -10,7 +10,7 @@ Feature: SyntheticMonitoring
     And I select "{{language_name}}" language
     When I set the value="<username>" for "username>>textbox" having "data-placeholder=Enter your username"
     And I click on "continue" having xpath="//span[contains(text(), 'Continue')]"
-    And I set the encrypted password="<password>" for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
+    And I set the Jenkins password for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
     And I click on "login>>button" having "type=submit and text=login"
     Then I will wait till all the loader icons disappears from the screen
     And I make sure that "title" having "class=title and text()=BI Dashboard" is visible to me on the "home page"
@@ -41,7 +41,7 @@ Feature: SyntheticMonitoring
     And I select "{{language_name}}" language
     When I set the value="<username>" for "username>>textbox" having "data-placeholder=Enter your username"
     And I click on "continue" having xpath="//span[contains(text(), 'Continue')]"
-    And I set the encrypted password="<password>" for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
+    And I set the Jenkins password for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
     And I click on "login>>button" having "type=submit and text=login"
     Then I will wait till all the loader icons disappears from the screen
     And I make sure that "title" having "class=title and text()=BI Dashboard" is visible to me on the "home page"
@@ -73,7 +73,7 @@ Feature: SyntheticMonitoring
     And I select "{{language_name}}" language
     When I set the value="<username>" for "username>>textbox" having "data-placeholder=Enter your username"
     And I click on "continue" having xpath="//span[contains(text(), 'Continue')]"
-    And I set the encrypted password="<password>" for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
+    And I set the Jenkins password for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
     And I click on "login>>button" having "type=submit and text=login"
     Then I will wait till all the loader icons disappears from the screen
     And I make sure that "title" having "class=title and text()=BI Dashboard" is visible to me on the "home page"
@@ -102,7 +102,7 @@ Feature: SyntheticMonitoring
     And I select "{{language_name}}" language
     When I set the value="<username>" for "username>>textbox" having "data-placeholder=Enter your username"
     And I click on "continue" having xpath="//span[contains(text(), 'Continue')]"
-    And I set the encrypted password="<password>" for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
+    And I set the Jenkins password for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
     And I click on "login>>button" having "type=submit and text=login"
     Then I will wait till all the loader icons disappears from the screen
     And I make sure that "title" having "class=title and text()=BI Dashboard" is visible to me on the "home page"
@@ -139,7 +139,7 @@ Feature: SyntheticMonitoring
     And I select "{{language_name}}" language
     When I set the value="<username>" for "username>>textbox" having "data-placeholder=Enter your username"
     And I click on "continue" having xpath="//span[contains(text(), 'Continue')]"
-    And I set the encrypted password="<password>" for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
+    And I set the Jenkins password for "password>>textbox" having xpath="//input[@data-placeholder='Enter your password']"
     And I click on "login>>button" having "type=submit and text=login"
     Then I will wait till all the loader icons disappears from the screen
     And I make sure that "title" having "class=title and text()=BI Dashboard" is visible to me on the "home page"

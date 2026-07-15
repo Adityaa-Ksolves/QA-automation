@@ -141,7 +141,9 @@ for name in sorted(os.listdir(results_dir)):
         scenario = case.attrib.get("name", "")
         duration = case.attrib.get("time", "0")
         rows.append((status, classname, scenario, duration))
-        problem = case.find("error") or case.find("failure")
+        problem = case.find("error")
+        if problem is None:
+            problem = case.find("failure")
         if problem is not None:
             message = problem.attrib.get("message") or first_error_line(problem.text)
             problem_rows.append((status, scenario, message))
