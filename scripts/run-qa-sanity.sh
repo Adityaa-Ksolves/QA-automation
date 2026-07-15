@@ -8,6 +8,7 @@ artifacts_dir="${QA_ARTIFACTS_DIR:-artifacts}"
 log_dir="${artifacts_dir}/logs"
 test_results_dir="${artifacts_dir}/test-results"
 raw_log="${log_dir}/qa-raw.log"
+stream_raw_log="${QA_STREAM_RAW_LOG:-0}"
 
 section() {
   echo
@@ -82,8 +83,14 @@ echo "${qa_command}"
 
 set +e
 section "QA Results"
-bash -o pipefail -c "${qa_command}" 2>&1 | tee "${raw_log}"
-exit_code="${PIPESTATUS[0]}"
+if [[ "${stream_raw_log}" == "1" ]]; then
+  bash -o pipefail -c "${qa_command}" 2>&1 | tee "${raw_log}"
+  exit_code="${PIPESTATUS[0]}"
+else
+  echo "Running QA command. Full Behave output is being written to ${raw_log}."
+  bash -o pipefail -c "${qa_command}" >"${raw_log}" 2>&1
+  exit_code="$?"
+fi
 set -e
 
 section "QA Result Table"
@@ -95,7 +102,21 @@ import xml.etree.ElementTree as ET
 
 results_dir = sys.argv[1]
 rows = []
+problem_rows = []
 total = failed = errored = skipped = 0
+
+def first_error_line(text):
+    if not text:
+        return ""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    preferred = [
+        line for line in lines
+        if "selenium.common.exceptions" in line
+        or line.startswith("AssertionError")
+        or line.startswith("ValueError")
+        or line.startswith("TimeoutException")
+    ]
+    return (preferred or lines)[0]
 
 for name in sorted(os.listdir(results_dir)):
     if not name.endswith(".xml"):
@@ -120,6 +141,10 @@ for name in sorted(os.listdir(results_dir)):
         scenario = case.attrib.get("name", "")
         duration = case.attrib.get("time", "0")
         rows.append((status, classname, scenario, duration))
+        problem = case.find("error") or case.find("failure")
+        if problem is not None:
+            message = problem.attrib.get("message") or first_error_line(problem.text)
+            problem_rows.append((status, scenario, message))
 
 print(f"{'Status':<8} {'Time(s)':<8} Scenario")
 print(f"{'-' * 8} {'-' * 8} {'-' * 60}")
@@ -129,6 +154,15 @@ for status, classname, scenario, duration in rows:
 
 print("")
 print(f"Total: {total}  Passed: {total - failed - errored - skipped}  Failed: {failed}  Errors: {errored}  Skipped: {skipped}")
+
+if problem_rows:
+    print("")
+    print("Failures")
+    print("--------")
+    for status, scenario, message in problem_rows:
+        print(f"{status}: {scenario}")
+        if message:
+            print(f"  {message}")
 PY
 else
   echo "No JUnit XML found in ${test_results_dir}."
