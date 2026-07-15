@@ -209,8 +209,11 @@ def diagnostic_links():
         return []
     files = []
     for name in sorted(os.listdir(diag_dir)):
-        if name.endswith((".png", ".html")):
-            files.append(os.path.join(diag_dir, name))
+        path = os.path.join(diag_dir, name)
+        if name.endswith(".png"):
+            files.append(("Screenshot", path))
+        elif name.endswith(".html"):
+            files.append(("Page HTML", path))
     return files
 
 def status_class(status):
@@ -228,6 +231,38 @@ def scenario_case(scenario):
     if " -- @" in scenario:
         return "@" + scenario.split(" -- @", 1)[1].strip()
     return ""
+
+def linked_artifact(value):
+    normalized = value.strip()
+    if normalized.startswith("artifacts/"):
+        normalized = normalized[len("artifacts/"):]
+    path = os.path.join(artifacts_dir, normalized)
+    if os.path.exists(path):
+        return f"<a href='{rel(path)}'>{html.escape(os.path.basename(path))}</a>"
+    return html.escape(value)
+
+def failure_detail_html(message):
+    if not message:
+        return "<p class='muted'>No failure detail was captured. Open the raw log for the full traceback.</p>"
+    lines = [line.strip() for line in message.splitlines() if line.strip()]
+    if not lines:
+        return "<p class='muted'>No failure detail was captured. Open the raw log for the full traceback.</p>"
+
+    summary = html.escape(lines[0])
+    detail_rows = []
+    for line in lines[1:]:
+        if ":" not in line:
+            detail_rows.append(f"<div class='detail-row'><div class='detail-key'>Detail</div><div class='detail-value'>{html.escape(line)}</div></div>")
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        rendered_value = linked_artifact(value) if key in {"Screenshot", "HTML"} else html.escape(value)
+        detail_rows.append(f"<div class='detail-row'><div class='detail-key'>{html.escape(key)}</div><div class='detail-value'>{rendered_value}</div></div>")
+
+    if not detail_rows:
+        return f"<p class='failure-summary'>{summary}</p>"
+    return f"<p class='failure-summary'>{summary}</p><div class='failure-details'>{''.join(detail_rows)}</div>"
 
 passed = total - failed - errored - skipped
 completed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -266,7 +301,7 @@ if problem_rows:
             f"<div class='failure-heading'><span class='badge {status_class(status)}'>{html.escape(status)}</span>"
             f"<div><strong>{html.escape(title)}</strong>"
             f"<div class='scenario-meta'>{html.escape(case_id)}</div></div></div>"
-            f"<pre>{html.escape(message)}</pre>"
+            f"{failure_detail_html(message)}"
             "</article>"
         )
     failures_html = "<section id='failures' class='panel'><h2>Failures</h2>" + "\n".join(items) + "</section>"
@@ -274,8 +309,8 @@ if problem_rows:
 diagnostics_html = ""
 if diagnostics:
     links = "\n".join(
-        f"<a class='diag-link' href='{rel(path)}'>{html.escape(os.path.basename(path))}</a>"
-        for path in diagnostics
+        f"<a class='diag-link' href='{rel(path)}'><span>{html.escape(kind)}</span><small>{html.escape(os.path.basename(path))}</small></a>"
+        for kind, path in diagnostics
     )
     diagnostics_html = f"<section class='panel'><h2>UI Diagnostics</h2><div class='diag-grid'>{links}</div></section>"
 
@@ -455,6 +490,37 @@ pre {
   line-height: 1.45;
   margin: 10px 0 0;
 }
+.muted {
+  color: #6b7c8f;
+}
+.failure-summary {
+  margin: 12px 0 10px;
+  font-weight: 600;
+}
+.failure-details {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  background: #f8fafc;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.detail-key, .detail-value {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e5e8eb;
+}
+.detail-key {
+  background: #eef2f6;
+  color: #34495e;
+  font-weight: 700;
+  font-size: 12px;
+}
+.detail-value {
+  overflow-wrap: anywhere;
+}
+.detail-key:nth-last-child(2), .detail-value:last-child {
+  border-bottom: 0;
+}
 a {
   color: #1f618d;
   text-decoration: none;
@@ -501,8 +567,18 @@ a:hover {
   background: #f8fafc;
   border: 1px solid #e5e8eb;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 10px;
   overflow-wrap: anywhere;
+}
+.diag-link span {
+  display: block;
+  font-weight: 700;
+  color: #1f3a5f;
+}
+.diag-link small {
+  display: block;
+  color: #6b7c8f;
+  margin-top: 4px;
 }
 @media (max-width: 800px) {
   .page {
@@ -517,6 +593,12 @@ a:hover {
   }
   .summary {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+  .failure-details {
+    grid-template-columns: 1fr;
+  }
+  .detail-key {
+    border-bottom: 0;
   }
 }
 """

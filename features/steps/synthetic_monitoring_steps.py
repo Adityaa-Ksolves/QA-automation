@@ -547,7 +547,10 @@ def step_wait_loaders(context):
 @when('I will wait till the "{name}" having "{locator_text}" disappears from the screen within {seconds:d} seconds')
 def step_wait_disappears(context, name, locator_text, seconds):
     by, value = _parse_locator(locator_text)
-    _wait(context, seconds).until(EC.invisibility_of_element_located((by, value)))
+    try:
+        _wait(context, seconds).until(EC.invisibility_of_element_located((by, value)))
+    except TimeoutException as exc:
+        raise AssertionError(_page_diagnostics(context, f"Wait for {name} to disappear", by, value)) from exc
     _print_ui_result(context, name, "DISAPPEARED")
 
 
@@ -555,7 +558,10 @@ def step_wait_disappears(context, name, locator_text, seconds):
 @when('I make sure that "{name}" having "{locator_text}" is visible to me on the "{page_name}"')
 def step_visible_locator(context, name, locator_text, page_name):
     by, value = _parse_locator(locator_text)
-    _wait(context).until(EC.visibility_of_element_located((by, value)))
+    try:
+        _wait(context).until(EC.visibility_of_element_located((by, value)))
+    except TimeoutException as exc:
+        raise AssertionError(_page_diagnostics(context, f"Wait for visible {name}", by, value)) from exc
     _print_ui_result(context, name, "VISIBLE", page_name)
 
 
@@ -565,7 +571,10 @@ def step_visible_xpath_state(context, name, state, page_name, xpath):
     condition = EC.visibility_of_element_located((By.XPATH, xpath))
     if state.lower() != "visible":
         raise AssertionError(f"Unsupported visibility state: {state}")
-    _wait(context).until(condition)
+    try:
+        _wait(context).until(condition)
+    except TimeoutException as exc:
+        raise AssertionError(_page_diagnostics(context, f"Wait for visible {name}", By.XPATH, xpath)) from exc
     _print_ui_result(context, name, "VISIBLE", page_name)
 
 
