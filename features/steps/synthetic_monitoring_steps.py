@@ -62,7 +62,12 @@ def _collect_visible_labels(context, selector, script):
         values = context.browser.execute_script(script, selector)
     except Exception:
         return []
-    return [str(value).strip() for value in values if str(value).strip()][:15]
+    labels = []
+    for value in values:
+        label = re.sub(r"\s+", " ", str(value)).strip()
+        if label:
+            labels.append(label)
+    return labels[:15]
 
 
 def _page_diagnostics(context, action, by, value):
@@ -605,6 +610,40 @@ def step_compare_values(context, left, operator, right):
 
 
 use_step_matcher("parse")
+
+
+@then('I wait up to {seconds:d} seconds for the text of xpath="{xpath}" to differ from "{session_key}" and store it in "{updated_session_key}"')
+@when('I wait up to {seconds:d} seconds for the text of xpath="{xpath}" to differ from "{session_key}" and store it in "{updated_session_key}"')
+def step_wait_text_differs(context, seconds, xpath, session_key, updated_session_key):
+    old_key = session_key.split(".", 1)[1] if session_key.startswith("session.") else session_key
+    new_key = (
+        updated_session_key.split(".", 1)[1]
+        if updated_session_key.startswith("session.")
+        else updated_session_key
+    )
+    before = str(getattr(context, "session", {}).get(old_key, _resolve(context, session_key))).strip()
+    context._last_seen_text = ""
+
+    def text_changed(_driver):
+        elements = context.browser.find_elements(By.XPATH, xpath)
+        if not elements:
+            context._last_seen_text = "<element not found>"
+            return False
+        current = elements[0].text.strip()
+        context._last_seen_text = current
+        if current and current != before:
+            context.session[new_key] = current
+            return True
+        return False
+
+    try:
+        WebDriverWait(context.browser, seconds).until(text_changed)
+    except TimeoutException as exc:
+        details = _page_diagnostics(context, "Wait for text to change", By.XPATH, xpath)
+        details += f"\nPrevious text: {before}\nLast seen text: {context._last_seen_text}"
+        raise AssertionError(details) from exc
+
+    _print_ui_result(context, updated_session_key, "UPDATED", context.session[new_key])
 
 
 @when('I select "{menu_item}" from the hamburger menu')

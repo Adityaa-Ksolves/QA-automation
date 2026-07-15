@@ -249,14 +249,20 @@ def failure_detail_html(message):
         return "<p class='muted'>No failure detail was captured. Open the raw log for the full traceback.</p>"
 
     summary = html.escape(lines[0])
-    detail_rows = []
+    raw_rows = []
     for line in lines[1:]:
         if ":" not in line:
-            detail_rows.append(f"<div class='detail-row'><div class='detail-key'>Detail</div><div class='detail-value'>{html.escape(line)}</div></div>")
+            if raw_rows:
+                key, value = raw_rows[-1]
+                raw_rows[-1] = (key, f"{value} {line}".strip())
+            else:
+                raw_rows.append(("Detail", line))
             continue
         key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
+        raw_rows.append((key.strip(), value.strip()))
+
+    detail_rows = []
+    for key, value in raw_rows:
         rendered_value = linked_artifact(value) if key in {"Screenshot", "HTML"} else html.escape(value)
         detail_rows.append(f"<div class='detail-row'><div class='detail-key'>{html.escape(key)}</div><div class='detail-value'>{rendered_value}</div></div>")
 
