@@ -148,7 +148,7 @@ def clean_message(message):
     text = "\n".join(cleaned)
     if text in {"Message:", "Message", ""}:
         return "Selenium command failed. See raw log and UI diagnostics."
-    return text[:900]
+    return text[:2500]
 
 for name in sorted(os.listdir(results_dir)):
     if not name.endswith(".xml"):

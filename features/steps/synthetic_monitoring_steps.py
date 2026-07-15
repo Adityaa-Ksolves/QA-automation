@@ -70,7 +70,7 @@ def _collect_visible_labels(context, selector, script):
     return labels[:15]
 
 
-def _page_diagnostics(context, action, by, value):
+def _page_diagnostics(context, action, by, value, timeout=None):
     scenario = _safe_name(getattr(context, "current_scenario_name", "scenario"))
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     base_path = os.path.join(_artifact_dir(), f"{timestamp}-{scenario}")
@@ -123,7 +123,7 @@ def _page_diagnostics(context, action, by, value):
     )
 
     details = [
-        f"{action} timed out after {DEFAULT_TIMEOUT}s.",
+        f"{action} timed out after {timeout or DEFAULT_TIMEOUT}s.",
         f"Locator: {by} = {value}",
         f"URL: {getattr(context.browser, 'current_url', 'unknown')}",
         f"Title: {getattr(context.browser, 'title', 'unknown')}",
@@ -543,8 +543,14 @@ def step_click_named_text(context, name):
 def step_wait_loaders(context):
     try:
         _wait_for_page_settle(context)
-    except TimeoutException:
-        raise AssertionError("Loader icons did not disappear before timeout.")
+    except TimeoutException as exc:
+        loader_xpath = (
+            "//*[contains(@class, 'loader') or contains(@class, 'spinner') or "
+            "contains(@class, 'progress') or self::mat-progress-spinner or self::mat-spinner]"
+        )
+        raise AssertionError(
+            _page_diagnostics(context, "Wait for loader icons to disappear", By.XPATH, loader_xpath)
+        ) from exc
     _print_ui_result(context, "Loaders", "CLEARED")
 
 
@@ -555,7 +561,9 @@ def step_wait_disappears(context, name, locator_text, seconds):
     try:
         _wait(context, seconds).until(EC.invisibility_of_element_located((by, value)))
     except TimeoutException as exc:
-        raise AssertionError(_page_diagnostics(context, f"Wait for {name} to disappear", by, value)) from exc
+        raise AssertionError(
+            _page_diagnostics(context, f"Wait for {name} to disappear", by, value, timeout=seconds)
+        ) from exc
     _print_ui_result(context, name, "DISAPPEARED")
 
 
@@ -639,7 +647,7 @@ def step_wait_text_differs(context, seconds, xpath, session_key, updated_session
     try:
         WebDriverWait(context.browser, seconds).until(text_changed)
     except TimeoutException as exc:
-        details = _page_diagnostics(context, "Wait for text to change", By.XPATH, xpath)
+        details = _page_diagnostics(context, "Wait for text to change", By.XPATH, xpath, timeout=seconds)
         details += f"\nPrevious text: {before}\nLast seen text: {context._last_seen_text}"
         raise AssertionError(details) from exc
 
