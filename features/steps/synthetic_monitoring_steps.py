@@ -252,7 +252,10 @@ def _click(context, locator_text=None, xpath=None, timeout=None):
         time.sleep(0.5)
         element = _wait(context, timeout).until(EC.element_to_be_clickable((by, value)))
         context.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-        element.click()
+        try:
+            element.click()
+        except ElementClickInterceptedException as exc:
+            raise AssertionError(_page_diagnostics(context, "Click element", by, value)) from exc
     return element
 
 

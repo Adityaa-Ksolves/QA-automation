@@ -9,6 +9,7 @@ log_dir="${artifacts_dir}/logs"
 test_results_dir="${artifacts_dir}/test-results"
 raw_log="${log_dir}/qa-raw.log"
 html_report="${artifacts_dir}/Results.html"
+html_css="${artifacts_dir}/Results.css"
 stream_raw_log="${QA_STREAM_RAW_LOG:-0}"
 
 section() {
@@ -33,6 +34,7 @@ export TEST_TAGS="${TEST_TAGS:-}"
 export CUSTOMER="${CUSTOMER:-unknown}"
 export QA_SECRET_DIR="${QA_SECRET_DIR:-/home/jenkins/qa-secrets}"
 
+rm -rf "${log_dir}" "${test_results_dir}" "${artifacts_dir}/ui-diagnostics" "${html_report}" "${html_css}"
 mkdir -p "${log_dir}" "${test_results_dir}"
 
 section "QA Sanity Run"
@@ -97,7 +99,7 @@ set -e
 
 section "QA Result Table"
 if compgen -G "${test_results_dir}/*.xml" >/dev/null; then
-  python - "${test_results_dir}" "${html_report}" "${raw_log}" "${artifacts_dir}" <<'PY'
+  python - "${test_results_dir}" "${html_report}" "${html_css}" "${raw_log}" "${artifacts_dir}" <<'PY'
 import html
 import os
 import sys
@@ -106,8 +108,9 @@ from datetime import datetime, timezone
 
 results_dir = sys.argv[1]
 html_report = sys.argv[2]
-raw_log = sys.argv[3]
-artifacts_dir = sys.argv[4]
+html_css = sys.argv[3]
+raw_log = sys.argv[4]
+artifacts_dir = sys.argv[5]
 rows = []
 problem_rows = []
 total = failed = errored = skipped = 0
@@ -124,6 +127,20 @@ def first_error_line(text):
         or line.startswith("TimeoutException")
     ]
     return (preferred or lines)[0]
+
+def clean_message(message):
+    if not message:
+        return ""
+    text = " ".join(str(message).split())
+    if "Find element timed out" in text:
+        return text.split("Visible fields:", 1)[0].strip()
+    if "Click element timed out" in text:
+        return text.split("Visible fields:", 1)[0].strip()
+    if "Stacktrace:" in text:
+        text = text.split("Stacktrace:", 1)[0].strip()
+    if text in {"Message:", "Message"}:
+        return "Selenium command failed. See raw log and UI diagnostics."
+    return text[:500]
 
 for name in sorted(os.listdir(results_dir)):
     if not name.endswith(".xml"):
@@ -153,6 +170,7 @@ for name in sorted(os.listdir(results_dir)):
         message = ""
         if problem is not None:
             message = problem.attrib.get("message") or first_error_line(problem.text)
+            message = clean_message(message)
             problem_rows.append((status, scenario, message))
         rows.append((status, classname, scenario, duration, message))
 
@@ -202,12 +220,15 @@ diagnostics = diagnostic_links()
 rows_html = []
 for status, classname, scenario, duration, message in rows:
     label = f"{classname} - {scenario}" if classname else scenario
+    failure_cell = ""
+    if message:
+        failure_cell = "<a href='#failures'>View failure</a>"
     rows_html.append(
         "<tr>"
         f"<td><span class='badge {status_class(status)}'>{html.escape(status)}</span></td>"
         f"<td>{duration:.2f}</td>"
         f"<td>{html.escape(label)}</td>"
-        f"<td>{html.escape(message)}</td>"
+        f"<td>{failure_cell}</td>"
         "</tr>"
     )
 
@@ -221,7 +242,7 @@ if problem_rows:
             f"<pre>{html.escape(message)}</pre>"
             "</li>"
         )
-    failures_html = "<section><h2>Failures</h2><ul class='failures'>" + "\n".join(items) + "</ul></section>"
+    failures_html = "<section id='failures'><h2>Failures</h2><ul class='failures'>" + "\n".join(items) + "</ul></section>"
 
 diagnostics_html = ""
 if diagnostics:
@@ -231,63 +252,181 @@ if diagnostics:
     )
     diagnostics_html = f"<section><h2>UI Diagnostics</h2><ul>{links}</ul></section>"
 
+stylesheet = """body {
+  margin: 0;
+  color: #17202a;
+  background: #f4f7fa;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px;
+}
+.header {
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  padding: 20px 22px;
+  margin-bottom: 18px;
+}
+h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+h2 {
+  margin: 28px 0 12px;
+  font-size: 20px;
+}
+.meta {
+  color: #5d6d7e;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.card {
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  padding: 16px;
+}
+.label {
+  color: #5d6d7e;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+th, td {
+  text-align: left;
+  border-bottom: 1px solid #e5e8eb;
+  padding: 11px 12px;
+  vertical-align: top;
+}
+th {
+  background: #eef2f6;
+  color: #34495e;
+  font-size: 13px;
+}
+tr:last-child td {
+  border-bottom: 0;
+}
+.badge {
+  display: inline-block;
+  min-width: 58px;
+  text-align: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pass {
+  background: #d5f5e3;
+  color: #145a32;
+}
+.fail, .error {
+  background: #fadbd8;
+  color: #922b21;
+}
+.skip {
+  background: #eaeded;
+  color: #566573;
+}
+pre {
+  white-space: pre-wrap;
+  background: #f8fafc;
+  border: 1px solid #d8dee4;
+  border-radius: 6px;
+  padding: 10px;
+  overflow-x: auto;
+}
+a {
+  color: #1f618d;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+ul {
+  background: #ffffff;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  padding: 14px 14px 14px 34px;
+}
+.failures li {
+  margin-bottom: 14px;
+}
+@media (max-width: 800px) {
+  .page {
+    padding: 14px;
+  }
+  .summary {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
+"""
+
+with open(html_css, "w", encoding="utf-8") as handle:
+    handle.write(stylesheet)
+
 report = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>QA Results</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; margin: 24px; color: #17202a; background: #f7f9fb; }}
-    h1 {{ margin: 0 0 4px; }}
-    h2 {{ margin-top: 28px; }}
-    .meta {{ color: #566573; margin-bottom: 18px; }}
-    .summary {{ display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 12px; margin: 18px 0; }}
-    .card {{ background: white; border: 1px solid #d8dee4; border-radius: 6px; padding: 14px; }}
-    .label {{ color: #566573; font-size: 12px; text-transform: uppercase; }}
-    .value {{ font-size: 24px; font-weight: 700; margin-top: 4px; }}
-    table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8dee4; }}
-    th, td {{ text-align: left; border-bottom: 1px solid #e5e8eb; padding: 10px; vertical-align: top; }}
-    th {{ background: #eef2f6; }}
-    .badge {{ display: inline-block; min-width: 52px; text-align: center; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; }}
-    .pass {{ background: #d5f5e3; color: #145a32; }}
-    .fail, .error {{ background: #fadbd8; color: #922b21; }}
-    .skip {{ background: #eaeded; color: #566573; }}
-    pre {{ white-space: pre-wrap; background: #f4f6f7; border: 1px solid #d8dee4; border-radius: 6px; padding: 10px; }}
-    a {{ color: #1f618d; }}
-    ul {{ background: white; border: 1px solid #d8dee4; border-radius: 6px; padding: 12px 12px 12px 32px; }}
-  </style>
+  <link rel="stylesheet" href="{rel(html_css)}">
 </head>
 <body>
-  <h1>QA Results</h1>
-  <div class="meta">Generated {html.escape(completed)} for customer {html.escape(os.environ.get("CUSTOMER", "unknown"))}</div>
-  <section class="summary">
-    <div class="card"><div class="label">Total</div><div class="value">{total}</div></div>
-    <div class="card"><div class="label">Passed</div><div class="value">{passed}</div></div>
-    <div class="card"><div class="label">Failed</div><div class="value">{failed}</div></div>
-    <div class="card"><div class="label">Errors</div><div class="value">{errored}</div></div>
-    <div class="card"><div class="label">Skipped</div><div class="value">{skipped}</div></div>
-  </section>
-  <section>
-    <h2>Run Details</h2>
-    <table>
-      <tr><th>Customer</th><td>{html.escape(os.environ.get("CUSTOMER", "unknown"))}</td></tr>
-      <tr><th>Target URL</th><td>{html.escape(os.environ.get("TARGET_URL", ""))}</td></tr>
-      <tr><th>Browser</th><td>{html.escape(os.environ.get("BROWSER", ""))}</td></tr>
-      <tr><th>Tags</th><td>{html.escape(os.environ.get("TEST_TAGS", ""))}</td></tr>
-      <tr><th>Raw Log</th><td><a href="{rel(raw_log)}">{rel(raw_log)}</a></td></tr>
-    </table>
-  </section>
-  <section>
-    <h2>Scenarios</h2>
-    <table>
-      <thead><tr><th>Status</th><th>Time(s)</th><th>Scenario</th><th>Failure</th></tr></thead>
-      <tbody>
-        {"".join(rows_html)}
-      </tbody>
-    </table>
-  </section>
-  {failures_html}
-  {diagnostics_html}
+  <main class="page">
+    <section class="header">
+      <h1>QA Results</h1>
+      <div class="meta">Generated {html.escape(completed)} for customer {html.escape(os.environ.get("CUSTOMER", "unknown"))}</div>
+    </section>
+    <section class="summary">
+      <div class="card"><div class="label">Total</div><div class="value">{total}</div></div>
+      <div class="card"><div class="label">Passed</div><div class="value">{passed}</div></div>
+      <div class="card"><div class="label">Failed</div><div class="value">{failed}</div></div>
+      <div class="card"><div class="label">Errors</div><div class="value">{errored}</div></div>
+      <div class="card"><div class="label">Skipped</div><div class="value">{skipped}</div></div>
+    </section>
+    <section>
+      <h2>Run Details</h2>
+      <table>
+        <tr><th>Customer</th><td>{html.escape(os.environ.get("CUSTOMER", "unknown"))}</td></tr>
+        <tr><th>Target URL</th><td>{html.escape(os.environ.get("TARGET_URL", ""))}</td></tr>
+        <tr><th>Browser</th><td>{html.escape(os.environ.get("BROWSER", ""))}</td></tr>
+        <tr><th>Tags</th><td>{html.escape(os.environ.get("TEST_TAGS", ""))}</td></tr>
+        <tr><th>Raw Log</th><td><a href="{rel(raw_log)}">{rel(raw_log)}</a></td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>Scenarios</h2>
+      <table>
+        <thead><tr><th>Status</th><th>Time(s)</th><th>Scenario</th><th>Failure</th></tr></thead>
+        <tbody>
+          {"".join(rows_html)}
+        </tbody>
+      </table>
+    </section>
+    {failures_html}
+    {diagnostics_html}
+  </main>
 </body>
 </html>
 """
