@@ -54,8 +54,13 @@ pipeline {
       description: 'Browser requested by the QA automation.'
     )
     string(
+      name: 'RUN_AGENT_LABEL',
+      defaultValue: 'customer-piedmont',
+      description: 'Jenkins node label passed to each customer job. Use customer-piedmont to test all customers from the Piedmont agent.'
+    )
+    string(
       name: 'APP_USERNAME',
-      defaultValue: '',
+      defaultValue: 'rabil.khanna@openvault.com',
       description: 'Application username passed to customer jobs for parameterized login-smoke tests.'
     )
     string(
@@ -75,7 +80,7 @@ pipeline {
     )
     string(
       name: 'APP_PASSWORD_CREDENTIALS_ID',
-      defaultValue: 'qa-app-password',
+      defaultValue: 'rabil-password',
       description: 'Jenkins Secret text credential ID containing the plain application password used by each customer job.'
     )
   }
@@ -95,6 +100,7 @@ pipeline {
                 propagate: true,
                 parameters: [
                   string(name: 'CUSTOMER', value: customerKey),
+                  string(name: 'RUN_AGENT_LABEL', value: params.RUN_AGENT_LABEL),
                   string(name: 'ENVIRONMENT_URL', value: cfg.url),
                   string(name: 'BROWSER', value: params.BROWSER),
                   string(name: 'APP_USERNAME', value: params.APP_USERNAME),

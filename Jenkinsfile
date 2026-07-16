@@ -18,8 +18,18 @@ def customerTags = [
   'wow-trial': '@customer_wow_trial'
 ]
 
+def customerUrls = [
+  'piedmont': 'https://piedmont.nimblethis.net/',
+  'zito': 'https://nimble-web.zitomedia.net/',
+  'brctv': 'https://brctv.pnm.openvault.net/',
+  'comporium': 'https://comporiumv5.nimblethis.net/',
+  'sectv': 'http://sectv.vantage.openvault.net/',
+  'secv': 'https://secv.pnm.openvault.net/',
+  'wow-trial': 'https://wow-vantage-trial.openvault.net/'
+]
+
 pipeline {
-  agent { label "${customerLabels[params.CUSTOMER]}" }
+  agent { label "${params.RUN_AGENT_LABEL}" }
 
   options {
     timestamps()
@@ -32,12 +42,17 @@ pipeline {
     choice(
       name: 'CUSTOMER',
       choices: ['piedmont', 'zito', 'brctv', 'comporium', 'sectv', 'secv', 'wow-trial'],
-      description: 'Customer environment to test. The job runs on the matching customer-* Jenkins agent label.'
+      description: 'Customer environment to test. Controls target URL defaults and Behave customer row filtering.'
+    )
+    string(
+      name: 'RUN_AGENT_LABEL',
+      defaultValue: 'customer-piedmont',
+      description: 'Jenkins node label used to run the test. Use customer-piedmont to test all customers from the Piedmont agent.'
     )
     string(
       name: 'ENVIRONMENT_URL',
-      defaultValue: 'https://piedmont.nimblethis.net/',
-      description: 'VPN/private application URL reachable from the selected customer agent.'
+      defaultValue: '',
+      description: 'Optional application URL override. Leave blank to use the selected customer default URL.'
     )
     choice(
       name: 'BROWSER',
@@ -46,7 +61,7 @@ pipeline {
     )
     string(
       name: 'APP_USERNAME',
-      defaultValue: '',
+      defaultValue: 'rabil.khanna@openvault.com',
       description: 'Application username for parameterized login-smoke tests such as vantage_test_login.feature.'
     )
     string(
@@ -66,7 +81,7 @@ pipeline {
     )
     string(
       name: 'APP_PASSWORD_CREDENTIALS_ID',
-      defaultValue: 'qa-app-password',
+      defaultValue: 'rabil-password',
       description: 'Jenkins Secret text credential ID containing the plain application password. Used when Fernet key is unavailable.'
     )
   }
@@ -82,12 +97,16 @@ pipeline {
           if (!customerTags.containsKey(params.CUSTOMER)) {
             error "Unknown CUSTOMER '${params.CUSTOMER}'. Add it to customerTags in Jenkinsfile."
           }
-          if (!params.ENVIRONMENT_URL?.trim()) {
-            error 'ENVIRONMENT_URL is required.'
+          if (!customerUrls.containsKey(params.CUSTOMER)) {
+            error "Unknown CUSTOMER '${params.CUSTOMER}'. Add it to customerUrls in Jenkinsfile."
+          }
+          if (!params.RUN_AGENT_LABEL?.trim()) {
+            error 'RUN_AGENT_LABEL is required.'
           }
           if (!params.TEST_TAGS?.contains(customerTags[params.CUSTOMER])) {
             error "TEST_TAGS must include ${customerTags[params.CUSTOMER]} so this job only runs rows for ${params.CUSTOMER}."
           }
+          env.RESOLVED_ENVIRONMENT_URL = params.ENVIRONMENT_URL?.trim() ? params.ENVIRONMENT_URL.trim() : customerUrls[params.CUSTOMER]
           env.CUSTOMER_LABEL = customerLabels[params.CUSTOMER]
           env.CUSTOMER_TAG = customerTags[params.CUSTOMER]
         }
@@ -96,10 +115,11 @@ pipeline {
           set -eu
           echo "Customer: ${CUSTOMER}"
           echo "Jenkins node: ${NODE_NAME}"
-          echo "Expected label: ${CUSTOMER_LABEL}"
+          echo "Run agent label: ${RUN_AGENT_LABEL}"
+          echo "Customer default label: ${CUSTOMER_LABEL}"
           echo "Expected Behave customer tag: ${CUSTOMER_TAG}"
           echo "Behave tags: ${TEST_TAGS}"
-          echo "Target URL: ${ENVIRONMENT_URL}"
+          echo "Target URL: ${RESOLVED_ENVIRONMENT_URL}"
           if [ -n "${APP_USERNAME:-}" ]; then echo "App username: ${APP_USERNAME}"; fi
         '''
       }
@@ -110,7 +130,7 @@ pipeline {
         sh '''
           set +x
           set -eu
-          ./scripts/connectivity-check.sh "${ENVIRONMENT_URL}"
+          ./scripts/connectivity-check.sh "${RESOLVED_ENVIRONMENT_URL}"
         '''
       }
       post {
@@ -123,7 +143,6 @@ pipeline {
     stage('Run QA Sanity') {
       environment {
         CUSTOMER = "${params.CUSTOMER}"
-        TARGET_URL = "${params.ENVIRONMENT_URL}"
         BROWSER = "${params.BROWSER}"
         APP_USERNAME = "${params.APP_USERNAME}"
         TEST_TAGS = "${params.TEST_TAGS}"
@@ -145,19 +164,21 @@ pipeline {
             ))
           }
 
-          if (credentialsToBind) {
-            withCredentials(credentialsToBind) {
+          withEnv(["TARGET_URL=${env.RESOLVED_ENVIRONMENT_URL}", "ENVIRONMENT_URL=${env.RESOLVED_ENVIRONMENT_URL}"]) {
+            if (credentialsToBind) {
+              withCredentials(credentialsToBind) {
+                sh '''
+                  set +x
+                  set -eu
+                  ./scripts/run-qa-sanity.sh
+                '''
+              }
+            } else {
               sh '''
-                set +x
                 set -eu
                 ./scripts/run-qa-sanity.sh
               '''
             }
-          } else {
-            sh '''
-              set -eu
-              ./scripts/run-qa-sanity.sh
-            '''
           }
         }
       }
@@ -173,7 +194,7 @@ pipeline {
 
   post {
     always {
-      echo "Build completed for ${params.CUSTOMER} at ${params.ENVIRONMENT_URL}"
+      echo "Build completed for ${params.CUSTOMER} at ${env.RESOLVED_ENVIRONMENT_URL}"
     }
   }
 }
