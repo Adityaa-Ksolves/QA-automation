@@ -115,12 +115,12 @@ Feature: SyntheticMonitoring
     And I will wait till all the loader icons disappears from the screen
     And I press "PAGE_DOWN" key
     And I wait for 1 seconds
-    And I capture the "text" for the webelement having xpath="(//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" and store it in "session.polltime_before"
+    And I capture the "text" for the webelement having xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" and store it in "session.polltime_before"
     And I click on "Rescan Spectra" having xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::button or @role='button'][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'rescan')])[1]"
     And I will wait till all the loader icons disappears from the screen
     And I will wait till the "dialog box" having "text=Rescanning spectra" disappears from the screen within 120 seconds
     Then I will wait till all the loader icons disappears from the screen
-    And I wait up to 90 seconds for the text of xpath="(//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" to differ from "session.polltime_before" and store it in "session.polltime_after"
+    And I wait up to 90 seconds for the text of xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" to differ from "session.polltime_before" and store it in "session.polltime_after"
 
     Examples:
       | endpoint                                 | username                   | password                                                                                             | mac_address       | Server_name | Zone |

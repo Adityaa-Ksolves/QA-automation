@@ -594,7 +594,17 @@ def step_visible_xpath_state(context, name, state, page_name, xpath):
 @then('I capture the "{attribute}" for the webelement having xpath="{xpath}" and store it in "{session_key}"')
 @when('I capture the "{attribute}" for the webelement having xpath="{xpath}" and store it in "{session_key}"')
 def step_capture_text(context, attribute, xpath, session_key):
-    element = _find(context, xpath=xpath)
+    def visible_element(_driver):
+        elements = context.browser.find_elements(By.XPATH, xpath)
+        for candidate in elements:
+            if candidate.is_displayed():
+                return candidate
+        return False
+
+    try:
+        element = _wait(context).until(visible_element)
+    except TimeoutException as exc:
+        raise AssertionError(_page_diagnostics(context, "Find visible element", By.XPATH, xpath)) from exc
     captured = element.text if attribute == "text" else element.get_attribute(attribute)
     key = session_key.split(".", 1)[1] if session_key.startswith("session.") else session_key
     context.session[key] = captured
@@ -634,10 +644,11 @@ def step_wait_text_differs(context, seconds, xpath, session_key, updated_session
 
     def text_changed(_driver):
         elements = context.browser.find_elements(By.XPATH, xpath)
-        if not elements:
+        displayed = [element for element in elements if element.is_displayed()]
+        if not displayed:
             context._last_seen_text = "<element not found>"
             return False
-        current = elements[0].text.strip()
+        current = displayed[0].text.strip()
         context._last_seen_text = current
         if current and current != before:
             context.session[new_key] = current
