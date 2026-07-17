@@ -19,8 +19,8 @@ Feature: SyntheticMonitoring
     Then I will wait till all the loader icons disappears from the screen
     And I capture the "text" for the webelement having xpath="//span[contains(text(),'Latest Poll Time')]/.." and store it in "session.polltime_before"
     And I click on "Rescan Modem" having xpath="//button[.//span[contains(normalize-space(),'Rescan Modem')]]"
+    And I will wait till the "dialog box" having "text=Rescanning Modem" disappears from the screen within 240 seconds
     Then I will wait till all the loader icons disappears from the screen
-    And I will wait till the "dialog box" having "text=Rescanning Modem" disappears from the screen within 150 seconds
     And I wait for 3 seconds
     And I capture the "text" for the webelement having xpath="//span[contains(text(),'Latest Poll Time')]/.." and store it in "session.polltime_after"
     And I make sure that "{{session.polltime_before}}" "not equals" "{{session.polltime_after}}"
@@ -49,13 +49,13 @@ Feature: SyntheticMonitoring
     When I select "Install CM" from the hamburger menu
     And I set the value="<mac_address>" for "macid>>textbox" having "data-placeholder=Mac Address"
     And I click on "install_modem>>button" having "text=Install Modem"
-    And I will wait till the "label" having "text~Installing Modem" disappears from the screen within 180 seconds
+    And I will wait till the "label" having "text~Installing Modem" disappears from the screen within 240 seconds
     And I make sure that "label" having "text~Modem Detected" is visible to me on the "Modem Detected Dialog Box"
     And I make sure that "button" having "text:=Get Certificate" is visible to me on the "Modem Detected Dialog Box"
     And I make sure that "button" having "text:=Get Spectra" is visible to me on the "Modem Detected Dialog Box"
     And I click on "button" having "text:=Get Spectra"
-    And I will wait till the "label" having "text~Requesting" disappears from the screen within 150 seconds
-    And I will wait till the "label" having "text~Getting Spectra Data" disappears from the screen within 150 seconds
+    And I will wait till the "label" having "text~Requesting" disappears from the screen within 240 seconds
+    And I will wait till the "label" having "text~Getting Spectra Data" disappears from the screen within 240 seconds
     And I click on "button" having "text:=Get Certificate"
     Then I will wait till all the loader icons disappears from the screen
     And I make sure that "macid>>label" having "text:=<mac_address>" is visible to me on the "certificate details section"
@@ -81,13 +81,13 @@ Feature: SyntheticMonitoring
     When I select "Install CM" from the hamburger menu
     And I set the value="<mac_address>" for "macid>>textbox" having "data-placeholder=Mac Address"
     And I click on "install_modem>>button" having "text=Install Modem"
-    And I will wait till the "label" having "text~Installing Modem" disappears from the screen within 120 seconds
+    And I will wait till the "label" having "text~Installing Modem" disappears from the screen within 240 seconds
     And I make sure that "label" having "text~Modem Detected" is visible to me on the "Modem Detected Dialog Box"
     And I make sure that "button" having "text:=Get Certificate" is visible to me on the "Modem Detected Dialog Box"
     And I make sure that "button" having "text:=Get RxMER" is visible to me on the "Modem Detected Dialog Box"
     And I click on "button" having "text:=Get RxMER"
-    And I will wait till the "label" having "text~Requesting" disappears from the screen within 150 seconds
-    And I will wait till the "label" having "text~Get RxMER Data" disappears from the screen within 150 seconds
+    And I will wait till the "label" having "text~Requesting" disappears from the screen within 240 seconds
+    And I will wait till the "label" having "text~Get RxMER Data" disappears from the screen within 240 seconds
     And I make sure that "macid>>label" having "text:=<mac_address>" is visible to me on the "certificate details section"
     And I make sure that "view_birth_certificate>>button" having "text=View Birth Certificate" is visible to me on the "certificate details section"
 
@@ -117,10 +117,9 @@ Feature: SyntheticMonitoring
     And I wait for 1 seconds
     And I capture the "text" for the webelement having xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" and store it in "session.polltime_before"
     And I click on "Rescan Spectra" having xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::button or @role='button'][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'rescan')])[1]"
-    And I will wait till all the loader icons disappears from the screen
-    And I will wait till the "dialog box" having "text=Rescanning spectra" disappears from the screen within 120 seconds
+    And I will wait till the "dialog box" having "text=Rescanning spectra" disappears from the screen within 240 seconds
     Then I will wait till all the loader icons disappears from the screen
-    And I wait up to 90 seconds for the text of xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" to differ from "session.polltime_before" and store it in "session.polltime_after"
+    And I wait up to 180 seconds for the text of xpath="(//mat-expansion-panel[.//mat-panel-title[normalize-space(text())='Spectra Chart']]//*[self::td or self::div or self::span][contains(@class, 'mat-column-display_poll_time') or contains(@class, 'cdk-column-display_poll_time') or contains(@class, 'mat-column-poll_time') or contains(@class, 'cdk-column-poll_time') or contains(@class, 'display_poll_time')])[1]" to differ from "session.polltime_before" and store it in "session.polltime_after"
 
     Examples:
       | endpoint                                 | username                   | password                                                                                             | mac_address       | Server_name | Zone |
@@ -152,9 +151,8 @@ Feature: SyntheticMonitoring
     And I press "PAGE_DOWN" key
     And I press "PAGE_DOWN" key
     And I wait for 1 seconds
-    And I click on "button#1" having "text():=Rescan"
-    And I will wait till all the loader icons disappears from the screen
-    And I will wait till the "dialog box" having "text=Rescanning rxmer" disappears from the screen within 120 seconds
+    And I click on "Rescan RxMER" having xpath="(//mat-expansion-panel[.//mat-panel-title[contains(normalize-space(), 'RxMER Chart')]]//*[self::button or @role='button'][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'rescan')])[1]"
+    And I will wait till the "dialog box" having "text=Rescanning rxmer" disappears from the screen within 240 seconds
     Then I will wait till all the loader icons disappears from the screen
     Then I make sure that "RxMER Data (dB)" is "visible" to me on the "RxMER Chart" having xpath="//*[text()='RxMER Data (dB)']"
 

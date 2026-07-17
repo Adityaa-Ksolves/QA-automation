@@ -64,6 +64,11 @@ pipeline {
       description: 'Application username passed to customer jobs for parameterized login-smoke tests.'
     )
     string(
+      name: 'QA_UI_TIMEOUT',
+      defaultValue: '180',
+      description: 'Default Selenium UI wait timeout in seconds passed to each customer job.'
+    )
+    string(
       name: 'BASE_TAGS',
       defaultValue: '@synthetic_monitoring',
       description: 'Base Behave tag expression combined with each customer tag.'
@@ -104,6 +109,7 @@ pipeline {
                   string(name: 'ENVIRONMENT_URL', value: cfg.url),
                   string(name: 'BROWSER', value: params.BROWSER),
                   string(name: 'APP_USERNAME', value: params.APP_USERNAME),
+                  string(name: 'QA_UI_TIMEOUT', value: params.QA_UI_TIMEOUT),
                   string(name: 'TEST_TAGS', value: tagExpression),
                   text(name: 'QA_TEST_COMMAND', value: params.QA_TEST_COMMAND),
                   string(name: 'QA_PASSWORD_FERNET_CREDENTIALS_ID', value: params.QA_PASSWORD_FERNET_CREDENTIALS_ID),

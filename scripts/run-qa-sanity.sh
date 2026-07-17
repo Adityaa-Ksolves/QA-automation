@@ -43,6 +43,7 @@ printf "%-12s %s\n" "Target URL:" "${TARGET_URL}"
 printf "%-12s %s\n" "Browser:" "${BROWSER}"
 printf "%-12s %s\n" "Tags:" "${TEST_TAGS}"
 printf "%-12s %s\n" "Node:" "${NODE_NAME:-unknown}"
+printf "%-12s %s\n" "UI timeout:" "${QA_UI_TIMEOUT:-180}s"
 if [[ -n "${QA_PASSWORD_FERNET_KEY:-}" ]]; then
   printf "%-12s %s\n" "Fernet key:" "configured"
 else

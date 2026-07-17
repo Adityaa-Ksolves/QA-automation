@@ -65,6 +65,11 @@ pipeline {
       description: 'Application username for parameterized login-smoke tests such as vantage_test_login.feature.'
     )
     string(
+      name: 'QA_UI_TIMEOUT',
+      defaultValue: '180',
+      description: 'Default Selenium UI wait timeout in seconds. Increase for slower scan/rescan customer environments.'
+    )
+    string(
       name: 'TEST_TAGS',
       defaultValue: '@synthetic_monitoring and @customer_piedmont',
       description: 'Behave tag expression. Must include the selected customer tag, for example @customer_piedmont.'
@@ -103,6 +108,9 @@ pipeline {
           if (!params.RUN_AGENT_LABEL?.trim()) {
             error 'RUN_AGENT_LABEL is required.'
           }
+          if (!(params.QA_UI_TIMEOUT ==~ /\d+/) || params.QA_UI_TIMEOUT.toInteger() < 1) {
+            error 'QA_UI_TIMEOUT must be a positive integer number of seconds.'
+          }
           if (!params.TEST_TAGS?.contains(customerTags[params.CUSTOMER])) {
             error "TEST_TAGS must include ${customerTags[params.CUSTOMER]} so this job only runs rows for ${params.CUSTOMER}."
           }
@@ -120,6 +128,7 @@ pipeline {
           echo "Expected Behave customer tag: ${CUSTOMER_TAG}"
           echo "Behave tags: ${TEST_TAGS}"
           echo "Target URL: ${RESOLVED_ENVIRONMENT_URL}"
+          echo "UI timeout: ${QA_UI_TIMEOUT}s"
           if [ -n "${APP_USERNAME:-}" ]; then echo "App username: ${APP_USERNAME}"; fi
         '''
       }
@@ -147,6 +156,7 @@ pipeline {
         APP_USERNAME = "${params.APP_USERNAME}"
         TEST_TAGS = "${params.TEST_TAGS}"
         QA_TEST_COMMAND = "${params.QA_TEST_COMMAND}"
+        QA_UI_TIMEOUT = "${params.QA_UI_TIMEOUT}"
       }
       steps {
         script {

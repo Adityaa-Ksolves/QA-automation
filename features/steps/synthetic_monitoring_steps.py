@@ -19,7 +19,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
 ACCEPTABLE_STATUS_CODES = {200, 201, 202, 204, 301, 302, 303, 307, 308, 401, 403}
-DEFAULT_TIMEOUT = int(os.environ.get("QA_UI_TIMEOUT", "60"))
+DEFAULT_TIMEOUT = int(os.environ.get("QA_UI_TIMEOUT", "180"))
 LOWERCASE_XPATH = "abcdefghijklmnopqrstuvwxyz"
 UPPERCASE_XPATH = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
